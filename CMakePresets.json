@@ -1,0 +1,43 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "m4",
+      "displayName": "Cortex-M4 / Clang",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/m4",
+      "toolchainFile": "${sourceDir}/cmake/clang-arm-none-eabi.cmake",
+      "cacheVariables": {
+        "TX_CORE": "cortex_m4",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "m55",
+      "displayName": "Cortex-M55 / Clang / QEMU runnable",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/m55",
+      "toolchainFile": "${sourceDir}/cmake/clang-arm-none-eabi.cmake",
+      "cacheVariables": {
+        "TX_CORE": "cortex_m55",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "m85",
+      "displayName": "Cortex-M85 / Clang / compile-link only",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/m85",
+      "toolchainFile": "${sourceDir}/cmake/clang-arm-none-eabi.cmake",
+      "cacheVariables": {
+        "TX_CORE": "cortex_m85",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "m4", "configurePreset": "m4" },
+    { "name": "m55", "configurePreset": "m55" },
+    { "name": "m85", "configurePreset": "m85" }
+  ]
+}

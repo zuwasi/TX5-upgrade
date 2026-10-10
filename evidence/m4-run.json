@@ -1,0 +1,139 @@
+{
+  "status": "PASS",
+  "machine": "mps2-an386",
+  "core": "cortex-m4",
+  "virtual_time_model": "QEMU icount shift=7 (128 ns per emulated instruction)",
+  "host_wall_seconds": 0.4231019999133423,
+  "rows": [
+    {
+      "cycle": 0,
+      "tick": 0,
+      "buttons": [
+        false,
+        false
+      ],
+      "leds": [
+        true,
+        true
+      ]
+    },
+    {
+      "cycle": 1,
+      "tick": 25,
+      "buttons": [
+        false,
+        false
+      ],
+      "leds": [
+        false,
+        false
+      ]
+    },
+    {
+      "cycle": 2,
+      "tick": 50,
+      "buttons": [
+        true,
+        false
+      ],
+      "leds": [
+        true,
+        true
+      ]
+    },
+    {
+      "cycle": 3,
+      "tick": 75,
+      "buttons": [
+        true,
+        false
+      ],
+      "leds": [
+        true,
+        false
+      ]
+    },
+    {
+      "cycle": 4,
+      "tick": 100,
+      "buttons": [
+        false,
+        false
+      ],
+      "leds": [
+        true,
+        true
+      ]
+    },
+    {
+      "cycle": 5,
+      "tick": 125,
+      "buttons": [
+        false,
+        true
+      ],
+      "leds": [
+        false,
+        true
+      ]
+    },
+    {
+      "cycle": 6,
+      "tick": 150,
+      "buttons": [
+        false,
+        false
+      ],
+      "leds": [
+        true,
+        false
+      ]
+    },
+    {
+      "cycle": 7,
+      "tick": 175,
+      "buttons": [
+        false,
+        false
+      ],
+      "leds": [
+        false,
+        true
+      ]
+    },
+    {
+      "cycle": 8,
+      "tick": 200,
+      "buttons": [
+        false,
+        false
+      ],
+      "leds": [
+        true,
+        false
+      ]
+    },
+    {
+      "cycle": 9,
+      "tick": 225,
+      "buttons": [
+        false,
+        false
+      ],
+      "leds": [
+        false,
+        true
+      ]
+    }
+  ],
+  "log": "[boot] ThreadX GPIO behavior demo; LED output is semihosted\n[core] cortex-m4\n[metric] cpuid=1091551808\n(c) 2024 Microsoft Corp. (c) 2026-present Eclipse ThreadX contributors.  *  ThreadX Cortex-M4/GNU Version 6.5.2.202603 *\n[metric] sizeof_TX_THREAD=180\n[metric] led_stack_reserved=1024\n[metric] worker_thread_runs=2\n[selftest] queue/preemption/events/semaphore/mutex/byte-pool PASS\ncycle=0 BTN0=released BTN1=released LED0=ON LED1=ON tick=0\ncycle=1 BTN0=released BTN1=released LED0=OFF LED1=OFF tick=25\ncycle=2 BTN0=PRESSED BTN1=released LED0=ON LED1=ON tick=50\ncycle=3 BTN0=PRESSED BTN1=released LED0=ON LED1=OFF tick=75\ncycle=4 BTN0=released BTN1=released LED0=ON LED1=ON tick=100\ncycle=5 BTN0=released BTN1=PRESSED LED0=OFF LED1=ON tick=125\ncycle=6 BTN0=released BTN1=released LED0=ON LED1=OFF tick=150\ncycle=7 BTN0=released BTN1=released LED0=OFF LED1=ON tick=175\ncycle=8 BTN0=released BTN1=released LED0=ON LED1=OFF tick=200\ncycle=9 BTN0=released BTN1=released LED0=OFF LED1=ON tick=225\n[metric] led_thread_runs=12\n[metric] led_stack_high_water_bytes=212\n[pass] bounded LED sequence completed\n",
+  "metrics": {
+    "cpuid": 1091551808,
+    "sizeof_TX_THREAD": 180,
+    "led_stack_reserved": 1024,
+    "worker_thread_runs": 2,
+    "led_thread_runs": 12,
+    "led_stack_high_water_bytes": 212
+  },
+  "elf": "build\\m4\\threadx_gpio_demo.elf"
+}

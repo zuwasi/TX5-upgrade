@@ -24,3 +24,16 @@ to identify the behavior being demonstrated.
 QEMU is an external test dependency and is not redistributed by this project.
 The tested Windows build reports QEMU 11.1.0. See the QEMU project's licensing
 and distribution terms at <https://www.qemu.org/>.
+
+## PDF typography and rendering
+
+The PDF embeds Roboto fonts bundled with the temporary pdfmake 0.2.20 renderer.
+The fonts' embedded name-table metadata identifies Copyright 2011 The Roboto
+Project Authors and the SIL Open Font License, Version 1.1. The font license
+is preserved in `licenses/Roboto-OFL.txt`, also shipped beside the website PDF.
+The document content remains under this project's MIT License; the embedded
+font software retains its OFL license. See <https://openfontlicense.org/>.
+
+pdfmake is an external MIT-licensed rendering dependency; its source is not
+redistributed as part of the site. The HTML uses visitors' system fonts without
+downloading or redistributing font files.

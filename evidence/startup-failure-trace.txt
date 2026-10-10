@@ -1,0 +1,64 @@
+Loaded reset SP 0x0 PC 0x0 from vector table
+CPU Reset (CPU 0)
+R00=00000000 R01=00000000 R02=00000000 R03=00000000
+R04=00000000 R05=00000000 R06=00000000 R07=00000000
+R08=00000000 R09=00000000 R10=00000000 R11=00000000
+R12=00000000 R13=00000000 R14=ffffffff R15=00000000
+XPSR=40000000 -Z-- A S priv-thread
+Loaded reset SP 0x20001598 PC 0x15fd from vector table
+CPU Reset (CPU 0)
+R00=00000000 R01=00000000 R02=00000000 R03=00000000
+R04=00000000 R05=00000000 R06=00000000 R07=00000000
+R08=00000000 R09=00000000 R10=00000000 R11=00000000
+R12=00000000 R13=20001598 R14=ffffffff R15=000015fc
+XPSR=41000000 -Z-- T S priv-thread
+----------------
+IN: reset_handler
+0x000015fc:  f000 b800  b.w      #0x1600
+
+----------------
+IN: 
+0x00001600:  b672       cpsid    i
+
+----------------
+IN: 
+0x00001602:  492e       ldr      r1, [pc, #0xb8]
+0x00001604:  468d       mov      sp, r1
+0x00001606:  482e       ldr      r0, [pc, #0xb8]
+0x00001608:  492e       ldr      r1, [pc, #0xb8]
+0x0000160a:  4a2f       ldr      r2, [pc, #0xbc]
+0x0000160c:  f000 f83f  bl       #0x168e
+
+----------------
+IN: 
+0x0000168e:  4288       cmp      r0, r1
+0x00001690:  d00b       beq      #0x16aa
+
+----------------
+IN: 
+0x00001692:  eba2 0201  sub.w    r2, r2, r1
+0x00001696:  d008       beq      #0x16aa
+
+----------------
+IN: 
+0x00001698:  7803       ldrb     r3, [r0]
+0x0000169a:  f100 0001  add.w    r0, r0, #1
+0x0000169e:  700b       strb     r3, [r1]
+0x000016a0:  f101 0101  add.w    r1, r1, #1
+0x000016a4:  f1a2 0201  sub.w    r2, r2, #1
+0x000016a8:  d1f6       bne      #0x1698
+
+----------------
+IN: 
+0x00001698:  7803       ldrb     r3, [r0]
+
+Taking exception 4 [Data Abort] on CPU 0
+...at fault address 0x80000
+...with CFSR.PRECISERR and BFAR 0x80000
+...taking pending secure exception 3
+...loading from element 3 of secure vector table at 0xc
+...loaded new PC 0x429
+----------------
+IN: HardFault_Handler
+0x00000428:  f7ff bffe  b.w      #0x428
+

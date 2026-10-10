@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.png binary
+*.pdf binary
+# Preserve raw diagnostic output, including the tool's whitespace formatting.
+evidence/*-sections.txt whitespace=-blank-at-eof
+evidence/startup-failure-trace.txt whitespace=-blank-at-eol,-blank-at-eof

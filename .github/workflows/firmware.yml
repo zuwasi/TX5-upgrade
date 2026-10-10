@@ -1,0 +1,28 @@
+name: Clang firmware proof
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        core: [m4, m55, m85]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Install build and simulation dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang lld llvm ninja-build qemu-system-arm
+      - name: Configure
+        run: cmake --preset ${{ matrix.core }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.core }}
+      - name: Run the emulated firmware
+        if: matrix.core != 'm85'
+        run: ctest --test-dir build/${{ matrix.core }} --output-on-failure
+      - name: Check verifier negative tests
+        run: python3 -m unittest discover -s tests -p test_verifier.py -v

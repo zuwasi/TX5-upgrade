@@ -1,0 +1,461 @@
+{
+  "generatedAt": "2026-10-11T02:37:32.3820906+03:00",
+  "target": "file:///C:/Projects/TX5-upgrade/presentation/index.html",
+  "tooling": {
+    "agentBrowser": "0.20.0",
+    "browser": "HeadlessChrome/154.0.0.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+    "session": "tx5-qa-471",
+    "profile": "C:/Projects/TX5-upgrade/tmp/browser-profile-tx5-20261011 (isolated, unauthenticated, headless)"
+  },
+  "viewports": [
+    {
+      "width": 1366,
+      "name": "desktop",
+      "height": 900
+    },
+    {
+      "width": 390,
+      "name": "mobile",
+      "height": 844
+    }
+  ],
+  "checks": [
+    {
+      "name": "click #next -> slide-2",
+      "observed": "slide-2",
+      "passed": true
+    },
+    {
+      "name": "ArrowRight -> slide-3",
+      "observed": "slide-3",
+      "passed": true
+    },
+    {
+      "name": "ArrowLeft -> slide-2",
+      "observed": "slide-2",
+      "passed": true
+    },
+    {
+      "name": "click #home -> slide-1",
+      "observed": "slide-1",
+      "passed": true
+    },
+    {
+      "name": "hash #slide-21 activates replay slide",
+      "observed": "slide-21",
+      "passed": true
+    },
+    {
+      "name": "replay step x2 -> cycle 2, button0 held, LED0 lit",
+      "observed": "Cycle 2 / tick 50; button0=\"Button held (active-low)\"; led0 class=\"led lit\"; row=\"cycle=2 LED0=ON LED1=ON tick=50\"",
+      "passed": true
+    },
+    {
+      "name": "replay reset -> cycle 0",
+      "observed": "Cycle 0 / tick 0",
+      "passed": true
+    },
+    {
+      "name": "replay play advances after ~1800 ms",
+      "observed": "Cycle 3 / tick 75; play button label \"Pause\"",
+      "passed": true
+    },
+    {
+      "name": "replay play again pauses",
+      "observed": "label back to \"Play recorded sequence\"; still Cycle 3 / tick 75 after a further 1000 ms",
+      "passed": true
+    },
+    {
+      "name": "slide-23 ROM chart image loaded (desktop)",
+      "observed": "assets/rom.svg complete=true naturalWidth=300",
+      "passed": true
+    },
+    {
+      "name": "mobile slide-16 no document horizontal overflow",
+      "observed": "scrollWidth=375 clientWidth=375 innerWidth=390; pre scrollWidth=457 clientWidth=337 overflow-x=auto (inner scroll, permitted)",
+      "passed": true
+    },
+    {
+      "name": "mobile 33-slide sweep: active id, no document overflow, images loaded",
+      "observed": "33 slides found; 0 failures",
+      "passed": true
+    },
+    {
+      "name": "page errors (agent-browser errors)",
+      "observed": "none",
+      "passed": true
+    },
+    {
+      "name": "console messages (agent-browser console)",
+      "observed": "none",
+      "passed": true
+    }
+  ],
+  "notes": [
+    "scrollWidth 375 vs innerWidth 390 on text slides reflects the 15 px vertical scrollbar; clientWidth equals scrollWidth so there is no horizontal overflow.",
+    "agent-browser \"open <file-url>#slide-N\" for a hash-only change on the already-loaded page reported \"Operation timed out\" (no new load event), although navigation succeeded (slide-23 and slide-16 were active afterwards). Subsequent hash changes used location.hash via eval. This is a driver behaviour, not a page error."
+  ],
+  "failureLogs": [],
+  "mobileSweep": [
+    {
+      "hash": "#slide-1",
+      "activeId": "slide-1",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-2",
+      "activeId": "slide-2",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-3",
+      "activeId": "slide-3",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-4",
+      "activeId": "slide-4",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-5",
+      "activeId": "slide-5",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-6",
+      "activeId": "slide-6",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-7",
+      "activeId": "slide-7",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-8",
+      "activeId": "slide-8",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-9",
+      "activeId": "slide-9",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [
+        {
+          "src": "assets/source-trees.svg",
+          "complete": true,
+          "naturalWidth": 285
+        }
+      ],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-10",
+      "activeId": "slide-10",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [
+        {
+          "src": "assets/workflow.svg",
+          "complete": true,
+          "naturalWidth": 300
+        }
+      ],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-11",
+      "activeId": "slide-11",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [
+        {
+          "src": "assets/architecture.svg",
+          "complete": true,
+          "naturalWidth": 300
+        }
+      ],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-12",
+      "activeId": "slide-12",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-13",
+      "activeId": "slide-13",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-14",
+      "activeId": "slide-14",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-15",
+      "activeId": "slide-15",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-16",
+      "activeId": "slide-16",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-17",
+      "activeId": "slide-17",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-18",
+      "activeId": "slide-18",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-19",
+      "activeId": "slide-19",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-20",
+      "activeId": "slide-20",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-21",
+      "activeId": "slide-21",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-22",
+      "activeId": "slide-22",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-23",
+      "activeId": "slide-23",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [
+        {
+          "src": "assets/rom.svg",
+          "complete": true,
+          "naturalWidth": 300
+        }
+      ],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-24",
+      "activeId": "slide-24",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [
+        {
+          "src": "assets/ram.svg",
+          "complete": true,
+          "naturalWidth": 300
+        }
+      ],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-25",
+      "activeId": "slide-25",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [
+        {
+          "src": "assets/stack.svg",
+          "complete": true,
+          "naturalWidth": 300
+        }
+      ],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-26",
+      "activeId": "slide-26",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [
+        {
+          "src": "assets/host-cost.svg",
+          "complete": true,
+          "naturalWidth": 300
+        }
+      ],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-27",
+      "activeId": "slide-27",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [
+        {
+          "src": "assets/host-histogram.svg",
+          "complete": true,
+          "naturalWidth": 300
+        }
+      ],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-28",
+      "activeId": "slide-28",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "images": [
+        {
+          "src": "assets/tick-histogram.svg",
+          "complete": true,
+          "naturalWidth": 300
+        }
+      ],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-29",
+      "activeId": "slide-29",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-30",
+      "activeId": "slide-30",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-31",
+      "activeId": "slide-31",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-32",
+      "activeId": "slide-32",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    },
+    {
+      "hash": "#slide-33",
+      "activeId": "slide-33",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 390,
+      "images": [],
+      "outsideElements": []
+    }
+  ],
+  "screenshots": {
+    "desktopHome": "C:\\Projects\\TX5-upgrade\\evidence\\ui\\desktop-home.png (full page)",
+    "desktopLedReplay": "C:\\Projects\\TX5-upgrade\\evidence\\ui\\desktop-led-replay.png",
+    "desktopMemory": "C:\\Projects\\TX5-upgrade\\evidence\\ui\\desktop-memory.png",
+    "mobileCodeDiff": "C:\\Projects\\TX5-upgrade\\evidence\\ui\\mobile-code-diff.png",
+    "mobileHome": "C:\\Projects\\TX5-upgrade\\evidence\\ui\\mobile-home.png",
+    "mobileLedReplay": "C:\\Projects\\TX5-upgrade\\evidence\\ui\\mobile-led-replay.png"
+  }
+}
