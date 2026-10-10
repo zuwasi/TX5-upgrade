@@ -1,0 +1,11 @@
+/build/
+/out/
+/reports/generated/
+*.elf
+*.map
+*.o
+*.a
+*.pyc
+__pycache__/
+/tmp/
+/.qodo/
