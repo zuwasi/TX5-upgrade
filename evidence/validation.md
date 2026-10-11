@@ -35,12 +35,15 @@ speedup, power, WCET or sub-tick jitter is inferred.
 
 ## Presentation and PDF
 
-- 38 HTML slides and 38 selectable-text PDF pages (one page per slide).
+- 41 HTML slides and 41 selectable-text PDF pages (one page per slide).
 - Nine regenerated figures, eleven code-diff discussions.
 - Local link, image, CSP, replay-data and ELF/evidence-hash checks passed.
 - Figures were inspected visually after generation.
-- Browser screenshots in `ui/` are from the earlier 33-slide deck; the deck's
-  CSS and JavaScript are unchanged.
+- The ESL-branded deck was checked in desktop and 390-pixel mobile views,
+  including the introduction and challenges table. PDF introduction, challenges,
+  code and contact pages were rendered and inspected.
+- Browser screenshots in `ui/` are historical, from the earlier 33-slide deck;
+  current local visual checks are in the untracked `tmp/shots/` directory.
 
 ## Review limitation
 

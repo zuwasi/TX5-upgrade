@@ -54,7 +54,7 @@ def main():
     assert "G5.6.5.2" in (ROOT / "evidence/tx5-m4-console.txt").read_text(encoding="utf-8")
     assert (SITE / "evidence/summary.json").read_bytes() == \
         (ROOT / "evidence/summary.json").read_bytes()
-    images = list((SITE / "assets").glob("*.png"))
+    images = [png for png in (SITE / "assets").glob("*.png") if png.stem != "esl-logo"]
     assert len(images) == 9
     for png in images:
         with Image.open(png) as image:

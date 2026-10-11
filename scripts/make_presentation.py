@@ -14,13 +14,25 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "presentation"
 ASSETS = SITE / "assets"
-BG = "#0b1424"
-FG = "#eaf1fc"
-MUTED = "#a7b8d2"
-COLORS = ["#fdc573", "#58c7fa", "#78e1b3", "#c39bf5"]
+BG = "#2d2d2d"
+FG = "#f5f5f5"
+MUTED = "#bdbdbd"
+# ESL brand: amber #ffb30b, blue #4f9efb, charcoal #2d2d2d (from the ESL logo).
+COLORS = ["#ffb30b", "#4f9efb", "#9cc8fd", "#d3e7ff"]
 # Evidence key -> chart label, in migration order.
 STAGES = [("tx5-m4", "TX5 M4"), ("m4", "TX6 M4"), ("m85", "TX6 M85*"), ("m55", "TX6 M55+")]
 RUNS = [("tx5-m4", "TX5 M4"), ("m4", "TX6 M4"), ("m55", "TX6 M55+")]
+ESL_SITE = "https://eswlab.com/"
+ESL_CONTACT = "https://eswlab.com/contact-us/"
+DANIEL_LINKEDIN = "https://www.linkedin.com/in/liezrowice/"
+LOGO = "assets/esl-logo.png"
+PHOTO = "assets/daniel-liezrowice.jpg"
+CHARCOAL, BLUE, AMBER = "#2d2d2d", "#4f9efb", "#ffb30b"
+
+
+def data_uri(asset):
+    kind = "png" if asset.endswith(".png") else "jpeg"
+    return f"data:image/{kind};base64," + base64.b64encode((SITE / asset).read_bytes()).decode()
 
 
 def font(size=24, mono=False):
@@ -91,7 +103,7 @@ def make_figures(evidence):
          [label for _, label in RUNS] + ["Reserved"],
          [runs[key]["metrics"]["led_stack_high_water_bytes"] for key, _ in RUNS] + [1024], "B",
          "Deepest write below the 0xEF fill in this workload. M85 was not run; no M85 value.",
-         COLORS[:2] + COLORS[3:] + ["#5d6f8a"])
+         COLORS[:2] + COLORS[3:] + ["#6b6b6b"])
 
     fig = Figure()
     fig.text(28, 15, "Test execution cost on the host (not core performance)", 27)
@@ -194,7 +206,7 @@ def make_figures(evidence):
         (30, 310, "6. Board sign-off", "BSP / timing / FPU / IRQ"),
     ]
     for x, y, title, subtitle in boxes:
-        fig.rect(x, y, 320, 108, "#182840")
+        fig.rect(x, y, 320, 108, "#3b3b3b")
         fig.text(x + 18, y + 17, title, 24, COLORS[1])
         fig.text(x + 18, y + 62, subtitle, 20)
     for a, b in [(0, 1), (1, 2), (3, 4), (4, 5)]:
@@ -217,12 +229,12 @@ def make_figures(evidence):
         (397, "ThreadX kernel", "TX5.6 archive or TX6.5 src"),
         (759, "CPU port", "PendSV/SVC + task context"),
     ]:
-        fig.rect(x, 112, 325, 100, "#182840")
+        fig.rect(x, 112, 325, 100, "#3b3b3b")
         fig.text(x + 15, 128, heading, 24, COLORS[1])
         fig.text(x + 15, 172, detail, 18)
     for x in (363, 725):
         fig.text(x, 140, ">", 28, COLORS[2])
-    fig.rect(150, 279, 810, 100, "#182840")
+    fig.rect(150, 279, 810, 100, "#3b3b3b")
     fig.text(175, 292, "QEMU: Cortex-M4 (TX5 and TX6) or M55, NVIC, SysTick", 24, COLORS[2])
     fig.text(175, 337, "Semihost adapter emits LED states; no physical GPIO driver", 21)
     fig.line(555, 215, 555, 270, COLORS[2])
@@ -248,6 +260,14 @@ def slides(e):
     hw = {key: r[key]["metrics"]["led_stack_high_water_bytes"] for key in r}
     total_intervals = sum(len(r[key]["tick_intervals"]) for key in r)
 
+    add("ESL – Engineering Software Lab", "Embedded software consultancy · optimizing and migrating embedded projects",
+        block("esl-intro",
+              about=["Embedded software consultancy specializing in optimizing and migrating embedded projects.",
+                     "Parasoft and Perforce partner in Israel for over 20 years.",
+                     "This proof was designed and built by ESL to show a migration path with evidence, "
+                     "not just a plan."],
+              name="Daniel Liezrowice", role="CTO, ESL",
+              fact="Has used ThreadX for over 25 years."))
     add("ThreadX 5.6 → 6.5, Cortex-M4 → M85", "One application, three migration stages, executable evidence",
         p("The same Clang-built application runs on the real ThreadX 5.6 kernel, then on current "
           "MIT ThreadX 6.5, then is built for Cortex-M85."),
@@ -259,7 +279,7 @@ def slides(e):
             ["3  TX6-M85", "ThreadX 6.5.2.202603 / Cortex-M85", "Compiled and linked only"],
             ["+  TX6-M55", "ThreadX 6.5.2.202603 / Cortex-M55",
              f"Supplement, executed: {r['m55']['pass_count']}/{r['m55']['repeats']} runs"]]),
-        note("Use ← / →, touch arrows, or swipe. Home returns here."),
+        note("Use ← / →, touch arrows, or swipe. Home returns to the start."),
         block("toc"))
     add("Change one thing per stage", "So every difference has exactly one cause",
         table(["Step", "Kernel", "Core / ABI", "Application source"], [
@@ -272,6 +292,25 @@ def slides(e):
                 "not a substitute for M85 execution."),
         note("The float ABI change in stage 1 → 2 is forced by the TX5 archive, not chosen. "
              "It is called out as its own diff later."))
+    add("The challenges of this project", "What we did not have, and how each gap was closed",
+        table(["Challenge", "Why it matters", "How ESL handled it"], [
+            ["No ThreadX 5 source code: only a prebuilt binary archive",
+             "The port contract, ABI and configuration cannot be read from source or rebuilt",
+             "Recovered them from build attributes, symbols and disassembly of the 192 archive objects"],
+            ["No real target hardware: no M4 board, no M85 silicon",
+             "No physical GPIO, clocks, interrupts or cycle-accurate timing",
+             "QEMU MPS2 AN386 (M4) and MPS3 AN547 (M55), virtual LEDs and buttons, deterministic icount time"],
+            ["No Cortex-M85 emulator available",
+             "Stage 3 cannot execute anywhere in this setup",
+             "Ran the closest Armv8.1-M core (M55); M85 verified by build attributes and a full link"],
+            ["TX5 binary licence restrictions and a fixed soft-float ABI",
+             "The kernel cannot be redistributed, and every object must match its ABI",
+             "Linked from an external checkout only; Stage 1 built soft-float with packed enums; TCB size asserted"],
+            ["Compiler change from GCC to Clang",
+             "The TX5 archive was built by GCC; Clang has different defaults and assembler behaviour",
+             "Matched the archive ABI explicitly; fixed a flag-dependent startup loop found by QEMU trace"]]),
+        note("Each gap that could not be closed without hardware is listed again on the acceptance-gate slide, "
+             "so nothing is silently assumed."))
     add("ThreadX 5 and 6: what actually changes", "Same service model; different delivery, port contract and licence",
         table(["Concern", "ThreadX 5.6 (WICED archive)", "ThreadX 6.5 (Eclipse)"], [
             ["Delivery", "Headers + prebuilt GCC archive, no kernel source", "Full C source + CPU/toolchain ports"],
@@ -641,6 +680,8 @@ def slides(e):
         ]),
         note("Source and licence inventory checked on 2026-10-11. Runtime evidence records the exact "
              "compiler, emulator version, image and archive hashes and the virtual-time model."))
+    add("Planning an embedded migration?", "Talk to ESL about optimizing or migrating your embedded project",
+        block("contact"))
     return s
 
 
@@ -673,6 +714,27 @@ def render_block(b):
             f'<li><a href="{esc(url)}">{esc(title)}</a></li>' for title, url in b["items"]) + "</ul>"
     if kind == "toc":
         return '<div id="toc" class="toc"></div>'
+    if kind == "esl-intro":
+        about = "".join(f"<li>{esc(item)}</li>" for item in b["about"])
+        return f"""<div class="esl-intro">
+          <a class="esl-logo-large" href="{ESL_SITE}"><img src="{LOGO}" alt="ESL – Engineering Software Lab"></a>
+          <div class="esl-columns"><ul class="esl-about">{about}</ul>
+          <div class="person-card">
+            <a href="{DANIEL_LINKEDIN}"><img src="{PHOTO}" alt="{esc(b['name'])}"></a>
+            <div><strong>{esc(b['name'])}</strong><span>{esc(b['role'])}</span>
+            <p>{esc(b['fact'])}</p>
+            <a class="linkedin" href="{DANIEL_LINKEDIN}">LinkedIn profile</a></div>
+          </div></div></div>"""
+    if kind == "contact":
+        return f"""<div class="contact">
+          <a class="esl-logo-large" href="{ESL_SITE}"><img src="{LOGO}" alt="ESL – Engineering Software Lab"></a>
+          <p>Embedded software consultancy specializing in optimizing and migrating embedded projects.
+          Parasoft and Perforce partner in Israel for over 20 years.</p>
+          <div class="contact-actions">
+            <a class="primary" href="{ESL_CONTACT}">Contact ESL</a>
+            <a href="{DANIEL_LINKEDIN}">Daniel Liezrowice on LinkedIn</a>
+            <a href="https://github.com/zuwasi/TX5-upgrade">Source and evidence</a>
+          </div></div>"""
     if kind == "replay":
         return """<div class="replay" aria-label="Recorded QEMU LED evidence replay">
           <div class="replay-top"><strong>QEMU Cortex-M4 · ThreadX G5.6.5.2 · verified recording</strong>
@@ -724,9 +786,36 @@ def pdf_spec(deck):
                 content.append({"ul": b["items"], "style": "p"})
             elif kind == "code":
                 content += [{"text": b["label"], "style": "label"},
-                            {"text": b["text"], "style": "code"}]
+                            {"table": {"widths": ["*"], "body": [[
+                                {"text": b["text"], "style": "code", "fillColor": CHARCOAL}]]},
+                             "layout": "noBorders", "margin": [0, 2, 0, 14]}]
+            elif kind == "esl-intro":
+                content.append({"columns": [
+                    {"width": "*", "stack": [
+                        {"image": "esl_logo", "width": 300, "link": ESL_SITE,
+                         "margin": [0, 0, 0, 18]},
+                        {"ul": b["about"], "style": "p"}]},
+                    {"width": 190, "stack": [
+                        {"image": "daniel_photo", "width": 150, "link": DANIEL_LINKEDIN},
+                        {"text": b["name"], "bold": True, "fontSize": 14, "margin": [0, 8, 0, 0]},
+                        {"text": b["role"], "color": BLUE},
+                        {"text": b["fact"], "margin": [0, 6, 0, 6]},
+                        {"text": "LinkedIn profile", "link": DANIEL_LINKEDIN, "color": BLUE,
+                         "decoration": "underline"}]}], "columnGap": 30})
+            elif kind == "contact":
+                content += [
+                    {"image": "esl_logo", "width": 320, "link": ESL_SITE, "margin": [0, 10, 0, 20]},
+                    {"text": "Embedded software consultancy specializing in optimizing and migrating "
+                     "embedded projects. Parasoft and Perforce partner in Israel for over 20 years.",
+                     "style": "p"},
+                    {"ul": [
+                        {"text": f"Contact ESL: {ESL_CONTACT}", "link": ESL_CONTACT},
+                        {"text": f"Daniel Liezrowice on LinkedIn: {DANIEL_LINKEDIN}", "link": DANIEL_LINKEDIN},
+                        {"text": "Source and evidence: https://github.com/zuwasi/TX5-upgrade",
+                         "link": "https://github.com/zuwasi/TX5-upgrade"}], "style": "p"}]
             elif kind == "table":
-                head = [{"text": text, "bold": True, "color": "#126085"} for text in b["heads"]]
+                head = [{"text": text, "bold": True, "color": "#ffffff", "fillColor": CHARCOAL}
+                        for text in b["heads"]]
                 content.append({"table": {"headerRows": 1,
                                 "widths": ["*"] * len(head), "body": [head] + b["rows"]},
                                 "layout": "lightHorizontalLines", "fontSize": 11,
@@ -741,21 +830,33 @@ def pdf_spec(deck):
                 ], "fontSize": 10, "margin": [0, 6, 0, 10]})
     definition = {
         "pageSize": "A4", "pageOrientation": "landscape",
-        "pageMargins": [46, 42, 46, 36],
         "info": {"title": "ThreadX 5.6 to 6.5: Cortex-M4 to M85 migration proof",
-                 "author": "zuwasi", "subject": "Clang / QEMU migration evidence"},
-        "defaultStyle": {"font": "Roboto", "fontSize": 13, "color": "#182840"},
+                 "author": "ESL – Engineering Software Lab", "subject": "Clang / QEMU migration evidence"},
+        "pageMargins": [46, 62, 46, 40],
+        "header": {"margin": [46, 18, 46, 0], "columns": [
+            {"canvas": [{"type": "rect", "x": 0, "y": 0, "w": 9, "h": 9, "color": BLUE},
+                        {"type": "rect", "x": 5, "y": 5, "w": 9, "h": 9, "color": AMBER}],
+             "width": 20, "margin": [0, 6, 0, 0]},
+            {"text": "THREADX MIGRATION PROOF", "fontSize": 8, "bold": True, "color": "#7a7a7a",
+             "characterSpacing": 1.5, "margin": [0, 9, 0, 0]},
+            {"image": "esl_logo", "width": 76, "link": ESL_SITE, "alignment": "right",
+             "margin": [0, 0, 0, 0]}]},
+        "defaultStyle": {"font": "Roboto", "fontSize": 13, "color": CHARCOAL},
         "styles": {
-            "h1": {"fontSize": 25, "bold": True, "color": "#103a5e", "margin": [0, 0, 0, 9]},
-            "subtitle": {"fontSize": 14, "color": "#56718b", "margin": [0, 0, 0, 20]},
+            "h1": {"fontSize": 25, "bold": True, "color": CHARCOAL, "margin": [0, 0, 0, 7]},
+            "subtitle": {"fontSize": 14, "color": "#4a7fc0", "margin": [0, 0, 0, 18]},
             "p": {"fontSize": 13, "lineHeight": 1.15, "margin": [0, 7, 0, 12]},
-            "note": {"fontSize": 11, "color": "#80551a", "margin": [0, 9, 0, 8]},
-            "code": {"fontSize": 10, "lineHeight": 1.15, "margin": [0, 5, 0, 16]},
-            "label": {"fontSize": 10, "color": "#56718b", "margin": [0, 5, 0, 9]},
+            "note": {"fontSize": 11, "color": "#8a5d00", "margin": [0, 9, 0, 8]},
+            "code": {"fontSize": 10, "lineHeight": 1.15, "color": "#f5f5f5",
+                     "margin": [10, 9, 10, 9]},
+            "label": {"fontSize": 10, "color": "#6b6b6b", "margin": [0, 5, 0, 6]},
         },
-        "footer": {"text": "ThreadX 5.6 to 6.5 migration proof · MIT original work · M85 runtime remains unverified",
-                   "alignment": "center", "fontSize": 8, "color": "#6c7e91"},
+        "footer": {"text": "ESL – Engineering Software Lab · eswlab.com · ThreadX 5.6 to 6.5 migration proof · "
+                           "M85 runtime remains unverified",
+                   "link": ESL_SITE, "alignment": "center", "fontSize": 8, "color": "#7a7a7a"},
         "content": content,
+        # Registered once so the logo on every page header is embedded a single time.
+        "images": {"esl_logo": data_uri(LOGO), "daniel_photo": data_uri(PHOTO)},
     }
     # The bundled Roboto font does not map every arrow for selectable PDF text.
     # Keep symbols in the HTML deck, use explicit words in the PDF.
@@ -772,7 +873,8 @@ def main():
     for index, slide in enumerate(deck):
         sections.append(f'<section class="slide" id="slide-{index + 1}" '
                         f'aria-labelledby="title-{index}">'
-                        f'<div class="eyebrow">THREADX / ARM MIGRATION · {index + 1:02d}</div>'
+                        f'<div class="eyebrow"><span class="mark" aria-hidden="true"></span>'
+                        f'THREADX MIGRATION · {index + 1:02d}</div>'
                         f'<h1 id="title-{index}">{html.escape(slide["title"])}</h1>'
                         f'<p class="subtitle">{html.escape(slide["subtitle"])}</p>'
                         + "".join(render_block(b) for b in slide["blocks"]) + "</section>")
@@ -784,8 +886,11 @@ def main():
 <meta name="description" content="ThreadX 5.6 to 6.5 and Cortex-M4 to M85 migration proof: one application on the real TX5 kernel and on TX6, Clang builds, QEMU tests, code diffs and measured evidence.">
 <title>ThreadX 5.6 → 6.5 | Cortex-M4 → M85 migration proof</title>
 <link rel="stylesheet" href="deck.css"><script src="deck.js" defer></script></head>
-<body><header class="topbar"><a href="#slide-1" id="brand">TX5 → TX6 · Engineering proof</a>
-<div><a href="threadx-migration.pdf">Download PDF</a>
+<body><header class="topbar"><div class="brand-group">
+<a class="esl-logo" href=\"""" + ESL_SITE + """\"><img src=\"""" + LOGO + """\" alt="ESL – Engineering Software Lab"></a>
+<a href="#slide-1" id="brand">ThreadX 5 → 6 migration</a></div>
+<div class="links"><a href="threadx-migration.pdf">Download PDF</a>
+<a href=\"""" + ESL_CONTACT + """\">Contact ESL</a>
 <a href="https://github.com/zuwasi/TX5-upgrade">Source</a>
 <a href="https://zuwasi.github.io/Public-html-pages/">Site home</a></div></header>
 <main id="deck">""" + "\n".join(sections) + """</main>
@@ -814,7 +919,7 @@ def main():
     temp.mkdir(exist_ok=True)
     (temp / "threadx-migration.pdf.json").write_text(
         json.dumps(pdf_spec(deck), ensure_ascii=False), encoding="utf-8")
-    print(f"Generated {len(deck)} technical slides and 9 chart/diagram assets")
+    print(f"Generated {len(deck)} slides and 9 chart/diagram assets")
 
 
 if __name__ == "__main__":

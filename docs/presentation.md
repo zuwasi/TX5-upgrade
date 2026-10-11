@@ -4,7 +4,8 @@ Public HTML: <https://zuwasi.github.io/Public-html-pages/tx5-upgrade/>
 
 Public source: <https://github.com/zuwasi/TX5-upgrade>
 
-The presentation has 38 technical slides covering the three migration stages
+The presentation has 41 slides, including an ESL introduction, the project's
+five main challenges, and a closing contact slide. The technical slides cover the three migration stages
 (TX5.6 on Cortex-M4, TX6.5 on Cortex-M4, TX6.5 on Cortex-M85) plus the M55
 supplement: eleven code-diff discussions, binary-kernel inspection,
 source-tree/workflow/architecture diagrams, linked ROM and reserved RAM charts,
@@ -13,8 +14,12 @@ virtual-tick histogram. The browser LED replay uses the recorded Stage 1 QEMU
 rows, which the generator checks are identical on every runtime image.
 
 The HTML supports Previous/Next buttons, left/right arrow keys, Home,
-touch swipe and a first-slide table of contents. Source and PDF links are
-available at the top. The deck uses no CDN scripts, analytics or external fonts.
+touch swipe and a table of contents on the technical overview slide. Source,
+PDF and ESL contact links are available at the top. The light slide design uses
+ESL blue and amber with charcoal code and chart panels. Every slide has a linked
+ESL logo; the introduction includes Daniel Liezrowice's photo and LinkedIn link.
+The PDF uses the same branding and linked logos. The deck uses no CDN scripts,
+analytics or external fonts.
 
 ## Regenerate
 
