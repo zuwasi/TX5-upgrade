@@ -5,6 +5,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import statistics
@@ -13,7 +14,17 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
-from run_qemu import find_qemu, run  # noqa: E402
+from run_qemu import CURRENT_VERSION, find_qemu, run  # noqa: E402
+
+TX5_VERSION = "G5.6.5.2"
+WICED_COMMIT = "0886ec932a063e12db768cd09428e8a8ab555bce"
+# build directory -> (stage label, kernel version, QEMU machine/cpu or None)
+BUILDS = {
+    "tx5-m4": ("Stage 1: TX5.6 / Cortex-M4", TX5_VERSION, ("mps2-an386", "cortex-m4")),
+    "m4": ("Stage 2: TX6.5 / Cortex-M4", CURRENT_VERSION, ("mps2-an386", "cortex-m4")),
+    "m85": ("Stage 3: TX6.5 / Cortex-M85", CURRENT_VERSION, None),
+    "m55": ("Supplement: TX6.5 / Cortex-M55", CURRENT_VERSION, ("mps3-an547", "cortex-m55")),
+}
 
 
 def capture(command: list[str]) -> str:
@@ -27,6 +38,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.repeats < 2:
         parser.error("--repeats must be at least 2")
+    tx5_root = Path(os.environ.get("TX5_ROOT", ""))
+    archive = tx5_root / "WICED/RTOS/ThreadX/ThreadX.ARM_CM4.release.a"
+    if not archive.is_file():
+        raise RuntimeError("Set TX5_ROOT to the external WICED SDK checkout")
     evidence = ROOT / "evidence"
     evidence.mkdir(exist_ok=True)
     llvm_size = shutil.which("llvm-size")
@@ -40,6 +55,12 @@ def main() -> None:
         "threadx_tag": "v6.5.2.202603_rel",
         "threadx_sha": capture(
             ["git", "-C", str(ROOT / "third_party/threadx"), "rev-parse", "HEAD"]).strip(),
+        "tx5": {
+            "version": TX5_VERSION,
+            "source": "WICED SDK 3.1.0 prebuilt ThreadX.ARM_CM4.release.a (external, not redistributed)",
+            "wiced_commit": WICED_COMMIT,
+            "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        },
         "compiler": capture(["clang", "--version"]).splitlines()[0],
         "qemu": capture([qemu, "--version"]).splitlines()[0],
         "virtual_time_model": "QEMU icount shift=7,align=off,sleep=off; 128 ns/instruction",
@@ -47,12 +68,12 @@ def main() -> None:
             "Host wall time includes emulator startup, guest sleep, and semihosting.",
             "Host timings are not CPU cycle, silicon throughput, or WCET measurements.",
             "M85 is compile/link only; there is no M85 runtime or stack measurement.",
-            "All compared images use ThreadX 6.5.2.202603; no TX5 runtime is included.",
-            "Stack high-water values are observed through ThreadX stack checking.",
+            "TX5 and TX6 images use different kernel configurations; size deltas are not pure kernel growth.",
+            "Stack high-water is measured by scanning the 0xEFEFEFEF stack fill pattern.",
         ],
         "builds": {}, "runs": {},
     }
-    for core in ["m4", "m55", "m85"]:
+    for core, (label, version, target) in BUILDS.items():
         elf = ROOT / f"build/{core}/threadx_gpio_demo.elf"
         if not elf.is_file():
             raise FileNotFoundError(elf)
@@ -63,25 +84,24 @@ def main() -> None:
             if len(parts) == 3 and parts[0].startswith("."):
                 sections[parts[0]] = int(parts[1])
         data["builds"][core] = {
+            "stage": label, "threadx_version": version,
             "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
             "sections": sections,
             "rom_bytes": sum(sections.get(s, 0)
                              for s in [".vectors", ".text", ".ARM.exidx", ".data"]),
             "ram_reserved_bytes": sum(sections.get(s, 0)
                                       for s in [".data", ".bss", ".stack"]),
-            "runtime_status": "NOT_RUN" if core == "m85" else "PASS",
+            "runtime_status": "PASS" if target else "NOT_RUN",
         }
         (evidence / f"{core}-sections.txt").write_text(sections_text, encoding="utf-8")
-    # Alternate the cores to avoid measuring all of one core under one host load.
-    samples = {"m4": [], "m55": []}
+    runnable = [(core, version, target) for core, (_, version, target) in BUILDS.items() if target]
+    samples = {core: [] for core, _, _ in runnable}
+    # Interleave the images so host load affects each one equally.
     for index in range(args.repeats):
-        for core, machine, cpu in [
-            ("m4", "mps2-an386", "cortex-m4"),
-            ("m55", "mps3-an547", "cortex-m55"),
-        ]:
-            print(f"Run {index + 1}/{args.repeats}: {cpu}", flush=True)
-            result = run(ROOT / f"build/{core}/threadx_gpio_demo.elf", machine, cpu)
-            samples[core].append(result)
+        for core, version, (machine, cpu) in runnable:
+            print(f"Run {index + 1}/{args.repeats}: {core}", flush=True)
+            samples[core].append(run(ROOT / f"build/{core}/threadx_gpio_demo.elf",
+                                     machine, cpu, expected_version=version))
     for core, results in samples.items():
         times = [result["host_wall_seconds"] for result in results]
         intervals = [right["tick"] - left["tick"] for result in results

@@ -53,6 +53,20 @@ class VerifierTests(unittest.TestCase):
         self.reject(self.text.replace(
             "[selftest] queue/preemption/events/semaphore/mutex/byte-pool PASS", ""))
 
+    def test_version_prefix_is_not_exact_match(self):
+        self.reject(self.text.replace("Version 6.5.2.202603", "Version 6.5.2.2026031"))
+
+    def test_duplicate_version_is_rejected(self):
+        self.reject(self.text + "Version 6.5.2.202603\n")
+
+    def test_requested_tx5_does_not_accept_tx6(self):
+        with self.assertRaises(AssertionError):
+            validate(self.text, "cortex-m55", "5.6")
+
+    def test_invalid_version_is_rejected(self):
+        with self.assertRaises(ValueError):
+            validate(self.text, "cortex-m55", "5.*")
+
 
 if __name__ == "__main__":
     unittest.main()

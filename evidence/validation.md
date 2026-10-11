@@ -1,49 +1,56 @@
 # Validation record
 
 Recorded on 2026-10-11 (local date). The exact measurement timestamp, compiler,
-emulator build, image hashes and samples are in `summary.json`.
+emulator build, image and TX5 archive hashes and samples are in `summary.json`.
 
 ## Firmware
 
-- Clang/LLD configure and build: Cortex-M4, Cortex-M55, Cortex-M85, all passed.
-- Undefined-symbol inspection: all three ELF files have no unresolved symbols.
-- Cortex-M85 ELF attributes identify `cortex-m85`, Armv8.1-M Mainline and
-  AAPCS VFP. This is compile/link evidence only.
-- Eight alternating repeated QEMU runs per runnable core: M4 8/8, M55 8/8.
-- Each run verified CPU part, ThreadX version, RTOS service self-tests,
-  all ten LED/button states, nine 25-tick intervals, and successful termination.
-- CTest: `qemu_m4_led_demo` and `qemu_m55_led_demo` passed.
-- Python verifier tests: 11/11 passed, including ten corrupted-evidence cases.
+- Clang/LLD configure and build passed for all four images: `tx5-m4`
+  (ThreadX G5.6.5.2, WICED prebuilt archive, soft-float), `tx6-m4`, `m55` and
+  `tx6-m85` (ThreadX 6.5.2.202603, hard-float).
+- Undefined-symbol inspection: no ELF has unresolved symbols.
+- ELF attributes: `tx5-m4` has no FP_arch / VFP-args tag and packed enums,
+  matching the archive; TX6 M4 has VFPv4-D16 and AAPCS VFP; the M85 ELF
+  identifies `cortex-m85`, Armv8.1-M Mainline, MVE integer and float. M85 is
+  compile/link evidence only.
+- Eight interleaved repeated QEMU runs per runnable image: TX5-M4 8/8,
+  TX6-M4 8/8, M55 8/8. 216 of 216 sleep intervals were 25 ticks.
+- Each run verified the CPU part, the exact per-stage kernel banner version,
+  RTOS service self-tests, all ten LED/button states, nine 25-tick intervals,
+  and successful termination. LED/tick rows are identical on all three images.
+- CTest: `tx5-m4`, `m4` and `m55` QEMU tests passed.
+- Python verifier tests: 15/15 passed, including corrupted-evidence and
+  version-mismatch cases.
+- Configuration guards: a TX5 build is refused without `TX5_ROOT`, with
+  `TX5_ROOT` inside the repository, on a non-M4 core, against a directory
+  that is not a WICED checkout, or with a non-TX5 expected version.
 
-The original host-time run sometimes crossed a tick boundary during
-semihosting output. Final runs use deterministic QEMU icount virtual time.
-No hardware latency, speedup, power, WCET or sub-tick jitter is inferred.
+The first Stage 1 run found a header-configuration mismatch: the project's TX6
+`tx_user.h` shadowed WICED's, giving a 176-byte `TX_THREAD` while the archive
+clears 180 bytes per thread. The TX6 configuration moved to `config/tx6/`, and
+a static assertion now rejects the mismatch. The recorded runs are after the fix.
+
+QEMU icount virtual time is deterministic and synthetic. No hardware latency,
+speedup, power, WCET or sub-tick jitter is inferred.
 
 ## Presentation and PDF
 
-- 33 HTML slides and 33 selectable-text PDF pages.
-- Nine generated figures, eight code-diff discussions.
+- 38 HTML slides and 38 selectable-text PDF pages (one page per slide).
+- Nine regenerated figures, eleven code-diff discussions.
 - Local link, image, CSP, replay-data and ELF/evidence-hash checks passed.
-- JavaScript syntax and Python bytecode compilation passed.
-- Desktop 1366×900 and mobile 390×844 browser checks passed:
-  Previous/Next, keyboard arrows, Home, recorded replay controls and all slides.
-- No browser page errors or console messages were reported.
-- All nine figures loaded; no document-level horizontal overflow was found.
-- Screenshots and browser results are in `ui/`.
-- The site pre-publication checker reported no errors, warnings or info
-  findings for the new deck. The existing site's index has a pre-existing
-  missing-CSP info finding; it was not changed outside this task's scope.
-- Embedded PDF font metadata was inspected; Roboto OFL 1.1 notices are shipped.
+- Figures were inspected visually after generation.
+- Browser screenshots in `ui/` are from the earlier 33-slide deck; the deck's
+  CSS and JavaScript are unchanged.
 
 ## Review limitation
 
-A Qodo fast review was submitted, but the service could not obtain repository
-credentials for the workspace. It failed without producing findings, and
-was not retried automatically. No successful external Qodo review is claimed.
-Local build/runtime/artifact checks and inspection were completed.
+An earlier Qodo fast review failed because the service could not obtain
+repository credentials for the workspace. No successful external Qodo review
+is claimed.
 
 ## Still unverified
 
 Cortex-M85 execution, a real M85 SoC BSP, physical GPIO, TrustZone partitioning,
 mixed FPU/MVE register preservation stress, production interrupt loads,
-full WICED wireless/TLS integration and target-board performance qualification.
+WICED wireless/TLS integration and target-board performance qualification,
+including any TX5-vs-TX6 cycle comparison on silicon.

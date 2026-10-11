@@ -9,3 +9,6 @@
 __pycache__/
 /tmp/
 /.qodo/
+/private/
+/dependencies/
+/CMakeUserPresets.json

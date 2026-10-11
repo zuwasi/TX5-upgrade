@@ -29,7 +29,14 @@ set(CMAKE_RANLIB "${LLVM_RANLIB}" CACHE FILEPATH "LLVM ranlib" FORCE)
 set(THREADX_ARCH "${TX_CORE}" CACHE STRING "ThreadX architecture" FORCE)
 set(THREADX_TOOLCHAIN "gnu" CACHE STRING "ThreadX GNU-syntax port" FORCE)
 
-set(ARM_CPU_FLAGS "-mcpu=${TX_CPU} -mthumb -mfloat-abi=hard")
+if(DEFINED TX_GENERATION AND TX_GENERATION STREQUAL "5")
+    # The WICED ThreadX 5.6 archive is soft-float (its context switch saves
+    # r4-r11 only) and was built by GCC with packed enums. Every object in the
+    # image must share that ABI.
+    set(ARM_CPU_FLAGS "-mcpu=${TX_CPU} -mthumb -mfloat-abi=soft -fshort-enums")
+else()
+    set(ARM_CPU_FLAGS "-mcpu=${TX_CPU} -mthumb -mfloat-abi=hard")
+endif()
 set(CMAKE_C_FLAGS_INIT
     "${ARM_CPU_FLAGS} -ffreestanding -fno-builtin -ffunction-sections -fdata-sections")
 set(CMAKE_ASM_FLAGS_INIT

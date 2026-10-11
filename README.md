@@ -1,88 +1,102 @@
-# ThreadX 5.6 to 6.x and Cortex-M migration proof
+# ThreadX 5 to 6 and Cortex-M4 to M85 migration proof
 
-This repository is an independently written proof of concept for moving the behavior of a
-legacy WICED GPIO snippet onto current Eclipse ThreadX and a newer Cortex-M
-port. It deliberately does **not** contain WICED source or Broadcom's
-WICED-only ThreadX 5.6 binaries.
+One independently written application and QEMU board layer, built with Clang
+in three migration stages:
 
-## What is in scope
+| Stage | Preset | Kernel | Core | Evidence |
+| --- | --- | --- | --- | --- |
+| 1 | `tx5-m4` | ThreadX `G5.6.5.2`, prebuilt Cortex-M3/M4 archive from the WICED SDK 3.1.0 | Cortex-M4, soft-float | Built and run on QEMU `mps2-an386` |
+| 2 | `tx6-m4` | Eclipse ThreadX `v6.5.2.202603_rel` (MIT) | Cortex-M4, hard-float | Built and run on QEMU `mps2-an386` |
+| 3 | `tx6-m85` | Eclipse ThreadX `v6.5.2.202603_rel` (MIT) | Cortex-M85, hard-float | Compile/link only |
 
-- Historical baseline: Broadcom WICED SDK 3.1.0, which identifies its
-  ThreadX port as `ver5.6` and provides prebuilt Cortex-M4 archives.
-- New RTOS: Eclipse ThreadX `v6.5.2.202603_rel`, pinned as a submodule.
-  The originally linked `v6.1.12_rel` is an older release.
-- Compiler: Clang targeting `arm-none-eabi`; both C and GNU-style port
-  assembly are compiled with Clang.
-- Runnable QEMU target: Cortex-M55 on `mps3-an547` using QEMU 11.1.0.
-- Cortex-M85: the same application and ThreadX M85 GNU port are built as an
-  ELF image. QEMU 11.1.0 does not list an M85 CPU or MPS3 AN555 machine, so
-  the M85 image is compile/link evidence only, not an M85 runtime test.
-- Demo: two LED state machines, two deterministic active-low virtual buttons,
-  and a ThreadX thread that sleeps for 25 ticks between updates. QEMU
-  semihosting emits the LED/button state to the host console. This is a
-  scheduler/application simulation, not a model of a physical GPIO controller.
-- Service checks: a higher-priority worker suspends on a queue, resumes on send,
-  and signals an event. The firmware also checks semaphore success/error cases,
-  a mutex, byte-pool allocation/release, and exact 25-tick LED sleep intervals.
-- The firmware is a single secure image. TrustZone transitions, PACBTI,
-  MVE/FPU register preservation stress, and production interrupt loads are not
-  covered by these tests.
+A supplemental `m55` preset runs the same application on Cortex-M55
+(`mps3-an547`), the newest Armv8.1-M core the installed QEMU 11.1.0 can
+execute. It is extra runtime evidence for the Armv8.1-M port family, not a
+substitute for Stage 3 execution.
 
-## Build
+## The ThreadX 5 dependency
 
-Initialize the pinned ThreadX dependency:
+ThreadX 5 was never open source. The WICED SDK is publicly available and ships
+the ThreadX 5.6 headers and prebuilt `ThreadX.ARM_CM4.release.a`; its README
+limits those objects to use with WICED. This repository therefore never
+contains any SDK file. Stage 1 links the archive from a separate checkout
+(`TX5_ROOT`) and configuration fails if that path is inside this repository.
+
+```powershell
+git clone --filter=blob:none --no-checkout https://github.com/wwwllllllll/bcm-wiced-sdk.git C:\Projects\tx5-external\bcm-wiced-sdk
+git -C C:\Projects\tx5-external\bcm-wiced-sdk sparse-checkout set --no-cone '/WICED/RTOS/ThreadX/'
+git -C C:\Projects\tx5-external\bcm-wiced-sdk checkout 0886ec932a063e12db768cd09428e8a8ab555bce
+$env:TX5_ROOT = 'C:\Projects\tx5-external\bcm-wiced-sdk'
+```
+
+## Build and test
 
 ```powershell
 git submodule update --init --recursive
+
+cmake --preset tx5-m4;  cmake --build --preset tx5-m4;  ctest --test-dir build/tx5-m4 --output-on-failure
+cmake --preset tx6-m4;  cmake --build --preset tx6-m4;  ctest --test-dir build/m4 --output-on-failure
+cmake --preset tx6-m85; cmake --build --preset tx6-m85
+cmake --preset m55;     cmake --build --preset m55;     ctest --test-dir build/m55 --output-on-failure
+python -m unittest discover -s tests -p test_verifier.py
 ```
 
-Configure and build the runnable Cortex-M55 image:
+`tx6-m4` and `tx6-m85` share build directories with the `m4` and `m85`
+presets. Requirements: CMake 3.21+, Ninja, Python 3, LLVM/Clang with ARM
+support and `qemu-system-arm` with semihosting.
 
-```powershell
-cmake --preset m55
-cmake --build --preset m55
-python tests/run_qemu.py --elf build/m55/threadx_gpio_demo.elf --machine mps3-an547 --cpu cortex-m55
-```
+## What the shared application covers
 
-Build the Cortex-M85 image (compile/link only):
+- Two LED state machines and two deterministic active-low virtual buttons. A
+  held button forces its LED on without advancing that LED's toggle latch.
+- A thread that sleeps 25 ticks per update at a 100 Hz tick.
+- A higher-priority worker that preempts, suspends on an empty queue, resumes
+  on send and sets an event flag; semaphore success and empty-semaphore error;
+  mutex get/put; byte-pool allocate/release.
+- Run counts from `tx_thread_run_count` and stack high-water measured by
+  scanning the `0xEFEFEFEF` fill pattern, which both kernels write.
+- The verifier requires the exact kernel banner version (`G5.6.5.2` or
+  `6.5.2.202603`), the CPUID part number, all ten LED rows and exact
+  25-tick intervals.
 
-```powershell
-cmake --preset m85
-cmake --build --preset m85
-```
+Output is through QEMU semihosting. This simulates application and scheduler
+behaviour, not a physical GPIO controller. The images are single-secure;
+TrustZone, PACBTI, FPU/MVE context stress and production interrupt loads are
+not covered.
 
-The Cortex-M4 preset is a same-release control build:
+## What changed between TX5.6 and TX6 for this application
 
-```powershell
-cmake --preset m4
-cmake --build --preset m4
-python tests/run_qemu.py --elf build/m4/threadx_gpio_demo.elf --machine mps2-an386 --cpu cortex-m4
-```
+The application source is the same for all stages. The port layer differs:
 
-Requirements: CMake, Ninja, Python 3, LLVM/Clang with ARM target support, and
-QEMU system emulation for ARM. The local demonstration uses semihosting, so
-QEMU must be started with semihosting enabled.
+| Item | TX5.6 (WICED archive) | TX6.5 |
+| --- | --- | --- |
+| Float ABI | Soft-float; context switch saves r4-r11 only | Hard-float; FPU context handled by the port |
+| Enum size | Packed (`-fshort-enums`), must match the archive | Default |
+| PendSV / SVC handlers | `__tx_PendSVHandler` / `__tx_SVCallHandler` | `PendSV_Handler` / unused |
+| First thread start | `_tx_thread_schedule` issues `svc #0` | PendSV |
+| Low-level init | Must set `_tx_thread_system_stack_ptr` | Not needed |
+| Idle hook | Calls `platform_power_down_hook(ticks)` | None |
+| `_tx_version_id` | `const CHAR[]` | `CHAR[]` |
+| Configuration | WICED `tx_user.h`: `int errno` thread extension, no error checking, no preemption threshold, timers in ISR | Project `config/tx6/tx_user.h` |
+
+The WICED `tx_user.h` must be the one the application sees. If another
+`tx_user.h` is found first, `TX_THREAD` shrinks from 180 to 176 bytes while the
+archive still clears 180 bytes per thread, overwriting the next object. A
+compile-time assertion in `src/tx5_wiced_port.c` now rejects that build.
 
 ## Evidence limits
 
-The proof shows that the application behavior can be rebuilt against the
-current ThreadX release for Cortex-M4, M55, and M85 ports with Clang, and that
-the M55 image runs under QEMU. It does not prove compatibility of the complete
-WICED SDK, Broadcom wireless stack, a production board's GPIO driver, M85
-runtime behavior, hardware timing, WCET, or performance parity with an
-unavailable/proprietary ThreadX 5.6 binary.
+Section sizes are linked image sizes including diagnostics and self-tests.
+TX5 and TX6 sizes also reflect different kernel configurations (see above), so
+they are not a pure measure of kernel growth. Tests use QEMU instruction-count
+virtual time (`-icount shift=7`, 128 ns per emulated instruction), not a
+cycle-accurate model. Host wall times measure the test harness, not silicon
+performance. There is no M85 runtime or performance figure.
 
-All memory and performance numbers must be generated from the checked-in
-scripts and actual build/run artifacts. QEMU TCG timing is not a substitute
-for target silicon measurement. The harness uses QEMU instruction-count
-virtual time (`shift=7`, 128 ns per emulated instruction) for reproducible
-scheduler tests, not a cycle-accurate core model.
+See `docs/scope-and-evidence.md` for the evidence contract.
 
-See `presentation/` for the technical slide deck source and generated
-deliverables, and `docs/presentation.md` for regeneration instructions.
-
-## Share with stakeholders
+## Published deck
 
 - [Interactive technical presentation](https://zuwasi.github.io/Public-html-pages/tx5-upgrade/)
 - [Download PDF](https://zuwasi.github.io/Public-html-pages/tx5-upgrade/threadx-migration.pdf)
-- [Public source and backup](https://github.com/zuwasi/TX5-upgrade)
+- [Public source](https://github.com/zuwasi/TX5-upgrade)

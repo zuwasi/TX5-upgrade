@@ -1,4 +1,5 @@
 """Render the prepared presentation PDF and verify it before removing the temporary renderer."""
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -40,7 +41,9 @@ def main():
     output = ROOT / "outputs/threadx-migration.pdf"
     assert output.read_bytes().startswith(b"%PDF-"), "Invalid PDF signature"
     document = PdfReader(output)
-    assert len(document.pages) == 33, "PDF page count changed unexpectedly"
+    slides = json.loads((ROOT / "presentation/slides.json").read_text(encoding="utf-8"))
+    # One page per slide; more pages means a slide overflowed.
+    assert len(document.pages) == len(slides), "PDF page count differs from the slide count"
     assert all(page.extract_text() for page in document.pages), "Empty PDF page"
     script.unlink()
     print(f"Verified {len(document.pages)} selectable-text PDF pages")

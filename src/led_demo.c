@@ -2,6 +2,8 @@
 
 #include "tx_api.h"
 
+#include <stddef.h>
+
 #ifndef LED_DEMO_MAX_CYCLES
 #define LED_DEMO_MAX_CYCLES 10
 #endif
@@ -12,8 +14,23 @@
 
 static TX_THREAD led_thread;
 static ULONG led_thread_stack[LED_THREAD_STACK_BYTES / sizeof(ULONG)];
-extern CHAR _tx_version_id[];
 extern void rtos_selftest(void);
+
+/* Both ThreadX 5.6 and 6.x fill new stacks with this pattern. Scanning for it
+   measures every stack write, not just the SPs seen at context switches, and
+   works whether or not the kernel was built with stack checking. */
+#define DEMO_STACK_FILL 0xEFEFEFEFUL
+
+static uint32_t stack_high_water_bytes(void)
+{
+    size_t untouched = 0U;
+
+    while (untouched < sizeof(led_thread_stack) / sizeof(led_thread_stack[0]) &&
+           led_thread_stack[untouched] == DEMO_STACK_FILL) {
+        ++untouched;
+    }
+    return (uint32_t)(sizeof(led_thread_stack) - untouched * sizeof(led_thread_stack[0]));
+}
 
 static void led_thread_entry(ULONG input)
 {
@@ -23,6 +40,7 @@ static void led_thread_entry(ULONG input)
 
     (void)input;
     qemu_board_initialize();
+    /* Declared by tx_port.h: const in TX5.6, non-const in TX6. */
     qemu_write(_tx_version_id);
     qemu_write("\n");
     qemu_metric("sizeof_TX_THREAD", (uint32_t)sizeof(TX_THREAD));
@@ -49,9 +67,7 @@ static void led_thread_entry(ULONG input)
 #if LED_DEMO_MAX_CYCLES > 0
         if (cycle >= (uint32_t)LED_DEMO_MAX_CYCLES) {
             qemu_metric("led_thread_runs", led_thread.tx_thread_run_count);
-            qemu_metric("led_stack_high_water_bytes",
-                (uint32_t)((uintptr_t)led_thread.tx_thread_stack_end -
-                    (uintptr_t)led_thread.tx_thread_stack_highest_ptr + 1U));
+            qemu_metric("led_stack_high_water_bytes", stack_high_water_bytes());
             qemu_report_pass();
         }
 #endif

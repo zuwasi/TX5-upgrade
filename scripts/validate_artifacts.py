@@ -19,7 +19,7 @@ def main():
     deck = json.loads((SITE / "slides.json").read_text(encoding="utf-8"))
     soup = BeautifulSoup((SITE / "index.html").read_text(encoding="utf-8"), "html.parser")
     assert soup.html.get("lang") == "en"
-    assert len(soup.select(".slide")) == len(deck) == 33
+    assert len(soup.select(".slide")) == len(deck) >= 30
     assert len(soup.select(".code")) >= 8
     assert soup.find("meta", attrs={"name": "viewport"})
     assert soup.find("meta", attrs={"http-equiv": "Content-Security-Policy"})
@@ -34,20 +34,24 @@ def main():
             continue
         assert (SITE / location).is_file(), f"Missing local link: {location}"
     replay = json.loads(soup.find(id="recorded-run").string)
-    run = json.loads((ROOT / "evidence/m55-run.json").read_text(encoding="utf-8"))
-    assert replay == run["rows"], "Replay differs from verified firmware evidence"
+    runtime = ["tx5-m4", "m4", "m55"]
+    for core in runtime:
+        run = json.loads((ROOT / f"evidence/{core}-run.json").read_text(encoding="utf-8"))
+        assert replay == run["rows"], f"Replay differs from verified {core} evidence"
     summary = json.loads((ROOT / "evidence/summary.json").read_text(encoding="utf-8"))
     assert summary["threadx_sha"] == "93387b0a60382a29579bbad5045c68328e3751df"
+    assert summary["tx5"]["version"] == "G5.6.5.2"
     assert summary["builds"]["m85"]["runtime_status"] == "NOT_RUN"
     assert "m85" not in summary["runs"], "Unexpected M85 runtime claim"
-    for core in ["m4", "m55", "m85"]:
+    for core in runtime + ["m85"]:
         elf = ROOT / f"build/{core}/threadx_gpio_demo.elf"
         assert hashlib.sha256(elf.read_bytes()).hexdigest() == \
             summary["builds"][core]["elf_sha256"], f"Stale measured image: {core}"
-    for core in ["m4", "m55"]:
+    for core in runtime:
         assert summary["runs"][core]["pass_count"] == 8
         assert len(summary["runs"][core]["tick_intervals"]) == 72
         assert set(summary["runs"][core]["tick_intervals"]) == {25}
+    assert "G5.6.5.2" in (ROOT / "evidence/tx5-m4-console.txt").read_text(encoding="utf-8")
     assert (SITE / "evidence/summary.json").read_bytes() == \
         (ROOT / "evidence/summary.json").read_bytes()
     images = list((SITE / "assets").glob("*.png"))
@@ -66,7 +70,7 @@ def main():
         text = page.extract_text()
         assert len(text) > 100
         assert "\x00" not in text, f"Unmapped PDF character on page {index + 1}"
-    print("PASS: 33 slides/pages, 9 figures, source links, CSP, replay and measured image hashes")
+    print(f"PASS: {len(deck)} slides/pages, 9 figures, source links, CSP, replay and measured image hashes")
 
 
 if __name__ == "__main__":

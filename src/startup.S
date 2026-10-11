@@ -1,6 +1,12 @@
 /* SPDX-License-Identifier: MIT */
 .syntax unified
 .thumb
+#ifndef DEMO_PENDSV_HANDLER
+#define DEMO_PENDSV_HANDLER PendSV_Handler
+#endif
+#ifndef DEMO_SVC_HANDLER
+#define DEMO_SVC_HANDLER fault_handler
+#endif
 
 .section .vectors, "a", %progbits
 .balign 512
@@ -19,10 +25,12 @@ demo_vectors:
     .word fault_handler
 #endif
     .word 0, 0, 0
-    .word fault_handler /* No SVC calls in single-secure mode. */
+    /* TX6 single-secure makes no SVC calls; the TX5.6 port starts its first
+       thread with SVC. */
+    .word DEMO_SVC_HANDLER
     .word fault_handler
     .word 0
-    .word PendSV_Handler
+    .word DEMO_PENDSV_HANDLER
     .word SysTick_Handler
     .rept 112
     .word fault_handler

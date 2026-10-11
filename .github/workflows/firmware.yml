@@ -9,7 +9,11 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        core: [m4, m55, m85]
+        include:
+          - { preset: tx5-m4, dir: tx5-m4, run: true }
+          - { preset: tx6-m4, dir: m4, run: true }
+          - { preset: m55, dir: m55, run: true }
+          - { preset: tx6-m85, dir: m85, run: false }
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -17,12 +21,29 @@ jobs:
           persist-credentials: false
       - name: Install build and simulation dependencies
         run: sudo apt-get update && sudo apt-get install -y clang lld llvm ninja-build qemu-system-arm
+      # The ThreadX 5.6 kernel is used from an external WICED SDK checkout,
+      # outside the workspace, and is never added to this repository.
+      - name: Fetch the external WICED SDK ThreadX 5.6 distribution
+        if: matrix.preset == 'tx5-m4'
+        run: |
+          sdk="$RUNNER_TEMP/bcm-wiced-sdk"
+          git clone --filter=blob:none --no-checkout https://github.com/wwwllllllll/bcm-wiced-sdk.git "$sdk"
+          git -C "$sdk" sparse-checkout set --no-cone '/WICED/RTOS/ThreadX/'
+          git -C "$sdk" checkout 0886ec932a063e12db768cd09428e8a8ab555bce
+          echo "TX5_ROOT=$sdk" >> "$GITHUB_ENV"
       - name: Configure
-        run: cmake --preset ${{ matrix.core }}
+        run: cmake --preset ${{ matrix.preset }}
       - name: Build
-        run: cmake --build --preset ${{ matrix.core }}
+        run: cmake --build --preset ${{ matrix.preset }}
       - name: Run the emulated firmware
-        if: matrix.core != 'm85'
-        run: ctest --test-dir build/${{ matrix.core }} --output-on-failure
+        if: matrix.run
+        run: ctest --test-dir build/${{ matrix.dir }} --output-on-failure
       - name: Check verifier negative tests
         run: python3 -m unittest discover -s tests -p test_verifier.py -v
+      - name: Check the TX5 stage refuses to build without TX5_ROOT
+        if: matrix.preset == 'tx6-m4'
+        run: |
+          if cmake --preset tx5-m4 > tx5.log 2>&1; then
+            echo "tx5-m4 configured without TX5_ROOT"; exit 1
+          fi
+          grep -q "TX5_ROOT is required" tx5.log

@@ -2,6 +2,28 @@
   "version": 3,
   "configurePresets": [
     {
+      "name": "tx5-m4",
+      "displayName": "Stage 1: external licensed ThreadX 5 / Cortex-M4",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/tx5-m4",
+      "toolchainFile": "${sourceDir}/cmake/clang-arm-none-eabi.cmake",
+      "cacheVariables": {
+        "TX_CORE": "cortex_m4",
+        "TX_GENERATION": "5",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "tx6-m4",
+      "displayName": "Stage 2: MIT ThreadX 6 / Cortex-M4",
+      "inherits": "m4"
+    },
+    {
+      "name": "tx6-m85",
+      "displayName": "Stage 3: MIT ThreadX 6 / Cortex-M85 (compile/link only)",
+      "inherits": "m85"
+    },
+    {
       "name": "m4",
       "displayName": "Cortex-M4 / Clang",
       "generator": "Ninja",
@@ -9,6 +31,7 @@
       "toolchainFile": "${sourceDir}/cmake/clang-arm-none-eabi.cmake",
       "cacheVariables": {
         "TX_CORE": "cortex_m4",
+        "TX_GENERATION": "6",
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
@@ -20,6 +43,7 @@
       "toolchainFile": "${sourceDir}/cmake/clang-arm-none-eabi.cmake",
       "cacheVariables": {
         "TX_CORE": "cortex_m55",
+        "TX_GENERATION": "6",
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
@@ -31,11 +55,15 @@
       "toolchainFile": "${sourceDir}/cmake/clang-arm-none-eabi.cmake",
       "cacheVariables": {
         "TX_CORE": "cortex_m85",
+        "TX_GENERATION": "6",
         "CMAKE_BUILD_TYPE": "Release"
       }
     }
   ],
   "buildPresets": [
+    { "name": "tx5-m4", "configurePreset": "tx5-m4" },
+    { "name": "tx6-m4", "configurePreset": "tx6-m4" },
+    { "name": "tx6-m85", "configurePreset": "tx6-m85" },
     { "name": "m4", "configurePreset": "m4" },
     { "name": "m55", "configurePreset": "m55" },
     { "name": "m85", "configurePreset": "m85" }

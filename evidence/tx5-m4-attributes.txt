@@ -1,0 +1,117 @@
+BuildAttributes {
+  FormatVersion: 0x41
+  Section 1 {
+    SectionLength: 64
+    Vendor: aeabi
+    Tag: Tag_File (0x1)
+    Size: 54
+    FileAttributes {
+      Attribute {
+        Tag: 67
+        TagName: conformance
+        Value: 2.09
+      }
+      Attribute {
+        Tag: 5
+        TagName: CPU_name
+        Value: cortex-m4
+      }
+      Attribute {
+        Tag: 6
+        Value: 13
+        TagName: CPU_arch
+        Description: ARM v7E-M
+      }
+      Attribute {
+        Tag: 7
+        Value: 77
+        TagName: CPU_arch_profile
+        Description: Microcontroller
+      }
+      Attribute {
+        Tag: 8
+        Value: 0
+        TagName: ARM_ISA_use
+        Description: Not Permitted
+      }
+      Attribute {
+        Tag: 9
+        Value: 2
+        TagName: THUMB_ISA_use
+        Description: Thumb-2
+      }
+      Attribute {
+        Tag: 14
+        Value: 0
+        TagName: ABI_PCS_R9_use
+        Description: v6
+      }
+      Attribute {
+        Tag: 17
+        Value: 1
+        TagName: ABI_PCS_GOT_use
+        Description: Direct
+      }
+      Attribute {
+        Tag: 18
+        Value: 4
+        TagName: ABI_PCS_wchar_t
+        Description: 4-byte
+      }
+      Attribute {
+        Tag: 20
+        Value: 1
+        TagName: ABI_FP_denormal
+        Description: IEEE-754
+      }
+      Attribute {
+        Tag: 21
+        Value: 0
+        TagName: ABI_FP_exceptions
+        Description: Not Permitted
+      }
+      Attribute {
+        Tag: 23
+        Value: 3
+        TagName: ABI_FP_number_model
+        Description: IEEE-754
+      }
+      Attribute {
+        Tag: 24
+        Value: 1
+        TagName: ABI_align_needed
+        Description: 8-byte alignment
+      }
+      Attribute {
+        Tag: 25
+        Value: 1
+        TagName: ABI_align_preserved
+        Description: 8-byte data alignment
+      }
+      Attribute {
+        Tag: 26
+        Value: 1
+        TagName: ABI_enum_size
+        Description: Packed
+      }
+      Attribute {
+        Tag: 30
+        Value: 2
+        TagName: ABI_optimization_goals
+        Description: Aggressive Speed
+      }
+      Attribute {
+        Tag: 34
+        Value: 1
+        TagName: CPU_unaligned_access
+        Description: v6-style
+      }
+      Attribute {
+        Tag: 38
+        Value: 1
+        TagName: ABI_FP_16bit_format
+        Description: IEEE-754
+      }
+    }
+  }
+}

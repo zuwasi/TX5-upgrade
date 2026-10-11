@@ -1,12 +1,12 @@
 C:\Projects\TX5-upgrade\build\m4\threadx_gpio_demo.elf  :
 section              size        addr
 .vectors              512           0
-.text               17123         512
-.ARM.exidx             16       17636
+.text               17441         512
+.ARM.exidx             16       17956
 .data                 128   536870912
-.bss                 4784   536871040
-.stack               2048   536875824
+.bss                 4788   536871040
+.stack               2048   536875832
 .ARM.attributes        73           0
-Total               24684
+Total               25006
 
 

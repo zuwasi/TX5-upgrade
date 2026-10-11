@@ -4,11 +4,13 @@ Public HTML: <https://zuwasi.github.io/Public-html-pages/tx5-upgrade/>
 
 Public source: <https://github.com/zuwasi/TX5-upgrade>
 
-The presentation has 33 technical slides, eight code-diff discussions,
+The presentation has 38 technical slides covering the three migration stages
+(TX5.6 on Cortex-M4, TX6.5 on Cortex-M4, TX6.5 on Cortex-M85) plus the M55
+supplement: eleven code-diff discussions, binary-kernel inspection,
 source-tree/workflow/architecture diagrams, linked ROM and reserved RAM charts,
-stack high-water observations, host-time distributions and histograms,
-and a virtual-tick histogram. The browser LED replay uses recorded verified
-QEMU rows, not a browser-side emulator.
+stack high-water observations, host-time distributions and histograms, and a
+virtual-tick histogram. The browser LED replay uses the recorded Stage 1 QEMU
+rows, which the generator checks are identical on every runtime image.
 
 The HTML supports Previous/Next buttons, left/right arrow keys, Home,
 touch swipe and a first-slide table of contents. Source and PDF links are
@@ -39,7 +41,9 @@ summary/console logs so readers can inspect the evidence behind the claims.
 
 The source repository contains the firmware, pinned ThreadX dependency,
 tests, evidence, generation scripts, HTML and PDF. Its GitHub workflow builds
-all three cores and runs M4/M55 tests under QEMU.
+all four images and runs the TX5-M4, TX6-M4 and M55 tests under QEMU, fetching
+the external WICED SDK into the runner's temp directory for Stage 1.
+`scripts/collect_evidence.py` needs `TX5_ROOT` set to that external checkout.
 
 ## Validation boundaries
 

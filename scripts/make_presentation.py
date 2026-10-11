@@ -5,6 +5,7 @@ import base64
 from collections import Counter
 import html
 import json
+import math
 from pathlib import Path
 from textwrap import dedent
 
@@ -16,7 +17,10 @@ ASSETS = SITE / "assets"
 BG = "#0b1424"
 FG = "#eaf1fc"
 MUTED = "#a7b8d2"
-COLORS = ["#58c7fa", "#78e1b3", "#fdc573"]
+COLORS = ["#fdc573", "#58c7fa", "#78e1b3", "#c39bf5"]
+# Evidence key -> chart label, in migration order.
+STAGES = [("tx5-m4", "TX5 M4"), ("m4", "TX6 M4"), ("m85", "TX6 M85*"), ("m55", "TX6 M55+")]
+RUNS = [("tx5-m4", "TX5 M4"), ("m4", "TX6 M4"), ("m55", "TX6 M55+")]
 
 
 def font(size=24, mono=False):
@@ -59,104 +63,117 @@ class Figure:
         self.image.save(ASSETS / f"{name}.png")
 
 
-def bars(name, title, groups, values, unit, note):
+def bars(name, title, groups, values, unit, note, colors=None):
     fig = Figure()
     fig.text(28, 18, title, 28)
     max_value = max(values) * 1.15
+    step = 300 / len(values)
     for index, (label, value) in enumerate(zip(groups, values)):
-        y = 94 + index * 92
-        fig.text(28, y, label, 25)
-        width = max(3, value / max_value * 650)
-        fig.rect(195, y, width, 42, COLORS[index % len(COLORS)])
-        fig.text(210 + width, y + 2, f"{value:,} {unit}", 23)
-    fig.text(28, 407, note, 19, MUTED)
+        y = 86 + index * step
+        fig.text(28, y, label, 23)
+        width = max(3, value / max_value * 640)
+        fig.rect(205, y, width, step * 0.55, (colors or COLORS)[index % len(COLORS)])
+        fig.text(220 + width, y + 2, f"{value:,} {unit}", 22)
+    fig.text(28, 405, note, 18, MUTED)
     fig.save(name)
 
 
 def make_figures(evidence):
     builds, runs = evidence["builds"], evidence["runs"]
-    bars("rom", "Linked ROM footprint (bytes)", ["M4", "M55", "M85*"],
-         [builds[core]["rom_bytes"] for core in ("m4", "m55", "m85")], "B",
-         "* M85: compile/link only. All three images use ThreadX 6.5.2.202603.")
-    bars("ram", "Reserved RAM: .data + .bss + system stack", ["M4", "M55", "M85*"],
-         [builds[core]["ram_reserved_bytes"] for core in ("m4", "m55", "m85")], "B",
+    labels = [label for _, label in STAGES]
+    bars("rom", "Linked ROM footprint (bytes)", labels,
+         [builds[key]["rom_bytes"] for key, _ in STAGES], "B",
+         "* compile/link only.  + supplemental QEMU core.  TX5 and TX6 kernel configurations differ.")
+    bars("ram", "Reserved RAM: .data + .bss + system stack", labels,
+         [builds[key]["ram_reserved_bytes"] for key, _ in STAGES], "B",
          "Includes service tests, two task stacks and a 2 KiB system stack; not minimum RTOS RAM.")
-    bars("stack", "Observed LED thread stack high-water", ["M4", "M55", "Reserved"],
-         [runs["m4"]["metrics"]["led_stack_high_water_bytes"],
-          runs["m55"]["metrics"]["led_stack_high_water_bytes"], 1024], "B",
-         "ThreadX stack-check samples in this workload. M85 was not run; no M85 stack value.")
+    bars("stack", "Observed LED thread stack high-water (fill-pattern scan)",
+         [label for _, label in RUNS] + ["Reserved"],
+         [runs[key]["metrics"]["led_stack_high_water_bytes"] for key, _ in RUNS] + [1024], "B",
+         "Deepest write below the 0xEF fill in this workload. M85 was not run; no M85 value.",
+         COLORS[:2] + COLORS[3:] + ["#5d6f8a"])
 
     fig = Figure()
     fig.text(28, 15, "Test execution cost on the host (not core performance)", 27)
-    all_times = [t for run in runs.values() for t in run["host_wall_seconds"]]
-    low, high = min(all_times) * 0.9, max(all_times) * 1.05
-    for index, core in enumerate(("m4", "m55")):
-        y = 125 + index * 125
-        fig.text(30, y - 7, core.upper(), 26)
-        for sample in runs[core]["host_wall_seconds"]:
-            x = 190 + (sample - low) / (high - low) * 830
-            fig.rect(x - 3, y, 6, 23, COLORS[index])
-        median = runs[core]["median_host_wall_seconds"]
-        x = 190 + (median - low) / (high - low) * 830
-        fig.line(x, y - 18, x, y + 44, FG)
-        fig.text(190, y + 49, f"median {median:.3f} s | 8 of 8 checks passed", 22, MUTED)
-    fig.line(190, 361, 1030, 361)
-    fig.text(185, 370, f"{low:.2f} s", 20, MUTED)
-    fig.text(940, 370, f"{high:.2f} s", 20, MUTED)
-    fig.text(28, 423, "Windows host; QEMU icount 128 ns/instruction. No silicon speedup inference.", 19, MUTED)
+    all_times = [t for key, _ in RUNS for t in runs[key]["host_wall_seconds"]]
+    low, high = min(all_times) * 0.85, max(all_times) * 1.05
+    run_colors = [COLORS[0], COLORS[1], COLORS[3]]
+    for index, (key, label) in enumerate(RUNS):
+        y = 95 + index * 95
+        fig.text(28, y - 7, label, 23)
+        for sample in runs[key]["host_wall_seconds"]:
+            x = 200 + (sample - low) / (high - low) * 820
+            fig.rect(x - 3, y, 6, 22, run_colors[index])
+        median = runs[key]["median_host_wall_seconds"]
+        x = 200 + (median - low) / (high - low) * 820
+        fig.line(x, y - 14, x, y + 38, FG)
+        fig.text(200, y + 38, f"median {median:.3f} s | {runs[key]['pass_count']} of "
+                 f"{runs[key]['repeats']} checks passed", 19, MUTED)
+    fig.line(200, 372, 1020, 372)
+    fig.text(195, 380, f"{low:.2f} s", 19, MUTED)
+    fig.text(935, 380, f"{high:.2f} s", 19, MUTED)
+    fig.text(28, 428, "TX5 idles in WFI (fast-forwarded by QEMU); TX6 idles in a spin loop. Harness cost only.", 18, MUTED)
     fig.save("host-cost")
 
     fig = Figure()
-    fig.text(28, 15, "Host-time histogram: eight alternating runs per core", 27)
-    edges = [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60]
+    fig.text(28, 15, "Host-time histogram: eight interleaved runs per image", 27)
+    start = math.floor(min(all_times) / 0.05) * 0.05
+    stop = math.ceil(max(all_times) / 0.05) * 0.05
+    edges = [round(start + 0.05 * i, 2) for i in range(round((stop - start) / 0.05) + 1)]
+    spacing = 900 / (len(edges) - 1)
     for index in range(len(edges) - 1):
-        x = 160 + index * 145
-        for core_index, core in enumerate(("m4", "m55")):
+        x = 150 + index * spacing
+        for run_index, (key, _) in enumerate(RUNS):
             count = sum(edges[index] <= t < edges[index + 1]
-                        for t in runs[core]["host_wall_seconds"])
-            height = count * 45
-            fig.rect(x + core_index * 42, 330 - height, 34, height, COLORS[core_index])
-            fig.text(x + core_index * 42, 298 - height, str(count), 20)
-        fig.text(x - 5, 352, f"{edges[index]:.2f}-{edges[index+1]:.2f}", 17, MUTED)
-    fig.text(45, 395, "M4", 20, COLORS[0])
-    fig.text(120, 395, "M55", 20, COLORS[1])
-    fig.text(260, 395, "Bins in host seconds; count = completed QEMU processes", 20, MUTED)
-    fig.text(28, 430, "Distribution measures the test harness, not architectural latency or WCET.", 19, MUTED)
+                        for t in runs[key]["host_wall_seconds"])
+            height = count * 30
+            if count:
+                fig.rect(x + run_index * 26, 330 - height, 22, height, run_colors[run_index])
+                fig.text(x + run_index * 26 + 4, 304 - height, str(count), 17)
+        fig.text(x - 4, 350, f"{edges[index]:.2f}", 16, MUTED)
+    for run_index, (_, label) in enumerate(RUNS):
+        fig.text(40 + run_index * 150, 388, label, 19, run_colors[run_index])
+    fig.text(500, 388, "Bin start in host seconds; width 0.05 s", 18, MUTED)
+    fig.text(28, 430, "Distribution measures the test harness, not architectural latency or WCET.", 18, MUTED)
     fig.save("host-histogram")
 
     fig = Figure()
     fig.text(28, 15, "RTOS sleep interval histogram (virtual ticks)", 27)
-    counts = Counter(runs["m4"]["tick_intervals"] + runs["m55"]["tick_intervals"])
+    intervals = [i for key, _ in RUNS for i in runs[key]["tick_intervals"]]
+    counts = Counter(intervals)
     for index, interval in enumerate((24, 25, 26)):
         x = 250 + index * 240
         count = counts[interval]
         height = count / max(counts.values()) * 250
-        fig.rect(x, 337 - height, 105, height, COLORS[1])
+        fig.rect(x, 337 - height, 105, height, COLORS[2])
         fig.text(x + 25, 302 - height, str(count), 25)
         fig.text(x + 4, 349, f"{interval} ticks", 22, MUTED)
-    fig.text(28, 407, "144 of 144 intervals = 25 ticks. Synthetic QEMU time; not sub-tick jitter.", 20, MUTED)
+    fig.text(28, 407, f"{counts[25]} of {len(intervals)} intervals = 25 ticks across TX5 M4, TX6 M4 and M55. "
+             "Synthetic QEMU time.", 18, MUTED)
     fig.save("tick-histogram")
 
     fig = Figure(1120, 590)
-    fig.text(24, 15, "Source structure: historical inputs vs public proof", 26)
+    fig.text(24, 15, "Source structure: external TX5 kernel vs public repository", 26)
     trees = [
-        ("WICED 3.1.0 reference (not redistributed)", [
-            "bcm-wiced-sdk/", "  apps/snip/gpio/",
-            "    gpio.c [proprietary notice]", "  WICED/RTOS/ThreadX/",
-            "    ver5.6/ [headers]",
-            "    ThreadX.ARM_CM4.*.a [binary]",
-            "  WICED/platform/MCU/STM32F4xx/",
-            "  tools/ARM_GNU/", "  LICENSE.txt",
+        ("TX5_ROOT: external WICED SDK checkout", [
+            "bcm-wiced-sdk/  (sparse, commit 0886ec9)",
+            "  WICED/RTOS/ThreadX/",
+            "    ver5.6/tx_api.h, tx_user.h ...",
+            "    ver5.6/Cortex_M3_M4/GCC/tx_port.h",
+            "    ThreadX.ARM_CM4.release.a",
+            "      192 objects, soft-float",
+            "  (no other SDK component is used)",
+            "", "never copied into the repository",
         ]),
         ("TX5-upgrade (MIT original work)", [
             "TX5-upgrade/", "  src/led_demo.c + rtos_selftest.c",
             "  src/startup.S + qemu_board.c",
-            "  boards/qemu.ld",
-            "  cmake/clang-arm-none-eabi.cmake",
-            "  third_party/threadx/ [pinned MIT]",
-            "    common/ + ports/cortex_m{4,55,85}",
-            "  tests/ + evidence/ + scripts/",
-            "  presentation/ + outputs/ + LICENSE",
+            "  src/tx5_wiced_port.c  [TX5 only]",
+            "  cmake/tx5-wiced-adapter.cmake",
+            "  config/tx6/tx_user.h  [TX6 only]",
+            "  third_party/threadx/ [pinned MIT 6.5]",
+            "  boards/qemu.ld + tests/ + evidence/",
+            "  scripts/ + presentation/ + LICENSE",
         ]),
     ]
     for index, (heading, tree) in enumerate(trees):
@@ -167,48 +184,48 @@ def make_figures(evidence):
     fig.save("source-trees")
 
     fig = Figure(1120, 540)
-    fig.text(28, 18, "Migration workflow: separate OS, CPU and board concerns", 26)
+    fig.text(28, 18, "Migration workflow: change one dimension at a time", 26)
     boxes = [
-        (30, 110, "1. Audit TX5", "versions / rights / APIs"),
-        (390, 110, "2. Replace RTOS", "pinned MIT ThreadX 6"),
-        (750, 110, "3. Rebuild M4", "Clang + control run"),
-        (750, 310, "4. Execute M55", "new port / same behavior"),
-        (390, 310, "5. Compile M85", "runtime remains open"),
+        (30, 110, "1. Inspect TX5", "ABI / symbols / config"),
+        (390, 110, "2. Stage 1 run", "TX5.6 on Cortex-M4"),
+        (750, 110, "3. Stage 2 run", "swap kernel: TX6 M4"),
+        (750, 310, "4. Stage 3 build", "swap core: TX6 M85"),
+        (390, 310, "5. M55 run", "Armv8.1-M supplement"),
         (30, 310, "6. Board sign-off", "BSP / timing / FPU / IRQ"),
     ]
     for x, y, title, subtitle in boxes:
         fig.rect(x, y, 320, 108, "#182840")
-        fig.text(x + 18, y + 17, title, 24, COLORS[0])
+        fig.text(x + 18, y + 17, title, 24, COLORS[1])
         fig.text(x + 18, y + 62, subtitle, 20)
     for a, b in [(0, 1), (1, 2), (3, 4), (4, 5)]:
         x1, y1, _, _ = boxes[a]
         x2, y2, _, _ = boxes[b]
         if x2 > x1:
-            fig.line(x1 + 322, y1 + 55, x2 - 8, y2 + 55, COLORS[1])
-            fig.text(x2 - 23, y2 + 33, ">", 24, COLORS[1])
+            fig.line(x1 + 322, y1 + 55, x2 - 8, y2 + 55, COLORS[2])
+            fig.text(x2 - 23, y2 + 33, ">", 24, COLORS[2])
         else:
-            fig.line(x1 - 4, y1 + 55, x2 + 330, y2 + 55, COLORS[1])
-            fig.text(x2 + 323, y2 + 33, "<", 24, COLORS[1])
-    fig.line(910, 220, 910, 303, COLORS[1])
-    fig.text(28, 475, "PoC completed through compile stage; silicon acceptance is a separate engineering gate.", 19, MUTED)
+            fig.line(x1 - 4, y1 + 55, x2 + 330, y2 + 55, COLORS[2])
+            fig.text(x2 + 323, y2 + 33, "<", 24, COLORS[2])
+    fig.line(910, 220, 910, 303, COLORS[2])
+    fig.text(28, 475, "Steps 1-5 are done (step 4 is compile/link only); step 6 needs the target M85 silicon.", 19, MUTED)
     fig.save("workflow")
 
     fig = Figure(1120, 520)
     fig.text(28, 20, "The executed path: real ThreadX, virtual board outputs", 27)
     for x, heading, detail in [
-        (35, "Application", "LED latch + RTOS services"),
-        (397, "ThreadX common", "ready lists / tick / IPC"),
-        (759, "CPU port", "PendSV + task context"),
+        (35, "Application", "same source, all stages"),
+        (397, "ThreadX kernel", "TX5.6 archive or TX6.5 src"),
+        (759, "CPU port", "PendSV/SVC + task context"),
     ]:
         fig.rect(x, 112, 325, 100, "#182840")
-        fig.text(x + 15, 128, heading, 24, COLORS[0])
+        fig.text(x + 15, 128, heading, 24, COLORS[1])
         fig.text(x + 15, 172, detail, 18)
     for x in (363, 725):
-        fig.text(x, 140, ">", 28, COLORS[1])
+        fig.text(x, 140, ">", 28, COLORS[2])
     fig.rect(150, 279, 810, 100, "#182840")
-    fig.text(175, 292, "QEMU: Cortex-M4 or M55, NVIC, SysTick and memory", 24, COLORS[1])
+    fig.text(175, 292, "QEMU: Cortex-M4 (TX5 and TX6) or M55, NVIC, SysTick", 24, COLORS[2])
     fig.text(175, 337, "Semihost adapter emits LED states; no physical GPIO driver", 21)
-    fig.line(555, 215, 555, 270, COLORS[1])
+    fig.line(555, 215, 555, 270, COLORS[2])
     fig.text(28, 427, "Port + core model execute real firmware instructions. HTML replay uses saved console evidence.", 19, MUTED)
     fig.save("architecture")
 
@@ -218,7 +235,7 @@ def block(kind, **values):
 
 
 def slides(e):
-    b, r = e["builds"], e["runs"]
+    b, r, tx5 = e["builds"], e["runs"], e["tx5"]
     s = []
     def add(title, subtitle, *blocks):
         s.append({"title": title, "subtitle": subtitle, "blocks": list(blocks)})
@@ -228,138 +245,225 @@ def slides(e):
     fig = lambda name, caption: block("figure", name=name, caption=caption)
     table = lambda heads, rows: block("table", heads=heads, rows=rows)
     note = lambda text: block("note", text=text)
-    add("ThreadX 5.6 → current 6.x", "Cortex-M4 → modern Cortex-M, with executable evidence",
-        p("A reproducible Clang + QEMU proof, not a promise of a full WICED board conversion."),
-        table(["Target", "Evidence achieved"], [
-            ["Cortex-M4 / ThreadX 6", "Compiled, linked, executed: 8/8 repeated runs"],
-            ["Cortex-M55 / ThreadX 6", "Compiled, linked, executed: 8/8 repeated runs"],
-            ["Cortex-M85 / ThreadX 6", "Compiled and linked only; no M85 runtime claim"]]),
-        note("Start with the OS/core differences, then inspect the code changes and measured results. "
-             "Use ← / →, touch arrows, or swipe. Home returns here."),
+    hw = {key: r[key]["metrics"]["led_stack_high_water_bytes"] for key in r}
+    total_intervals = sum(len(r[key]["tick_intervals"]) for key in r)
+
+    add("ThreadX 5.6 → 6.5, Cortex-M4 → M85", "One application, three migration stages, executable evidence",
+        p("The same Clang-built application runs on the real ThreadX 5.6 kernel, then on current "
+          "MIT ThreadX 6.5, then is built for Cortex-M85."),
+        table(["Stage", "Kernel / core", "Evidence achieved"], [
+            ["1  TX5-M4", f"ThreadX {tx5['version']} prebuilt archive / Cortex-M4",
+             f"Built, executed: {r['tx5-m4']['pass_count']}/{r['tx5-m4']['repeats']} runs"],
+            ["2  TX6-M4", "ThreadX 6.5.2.202603 / Cortex-M4",
+             f"Built, executed: {r['m4']['pass_count']}/{r['m4']['repeats']} runs"],
+            ["3  TX6-M85", "ThreadX 6.5.2.202603 / Cortex-M85", "Compiled and linked only"],
+            ["+  TX6-M55", "ThreadX 6.5.2.202603 / Cortex-M55",
+             f"Supplement, executed: {r['m55']['pass_count']}/{r['m55']['repeats']} runs"]]),
+        note("Use ← / →, touch arrows, or swipe. Home returns here."),
         block("toc"))
-    add("ThreadX 5 and 6: what actually changes", "Same RTOS service concepts, different source / port / licensing baseline",
-        table(["Concern", "WICED ThreadX 5.6", "Current Eclipse ThreadX 6.x"], [
-            ["Kernel delivery", "CM3/CM4 prebuilt archives; headers", "Public common C source + CPU/toolchain ports"],
-            ["Scheduling / services", "Threads, priority scheduling, queues, semaphores", "Same service families; retest semantics and configuration"],
-            ["Architecture", "SDK contains a Cortex-M3/M4 port", "Pinned release contains M4, M55 and M85 ports"],
-            ["Rights in this SDK", "WICED-only RTOS binary terms", "Current selected release has MIT license"],
-            ["Integration", "Vendor SDK and old GNU build", "Rebuilt source, matching ABI, Clang + CMake"]]),
-        note("This is an evidence-based comparison of the supplied SDK, not a claim that every ThreadX 5 "
-             "distribution had identical ports or rights. Kernel source is absent from the historical SDK."))
-    add("Why choose current 6.x for this project?", "Remove the opaque binary / port dependency before changing the core",
-        bullets("We need source we can rebuild for the target ABI and freely share.",
-                "The selected current release includes an upstream Cortex-M85 port.",
-                "A pinned open source baseline enables review, regression tests and reproducible build evidence.",
-                "Later 6.x versions include fixes and port updates; audit relevant release notes, do not freeze at the linked 2022 tag.",
-                "An old licensed TX5 kernel could theoretically be custom-ported. That is different scope, risk and rights."),
-        note("A version number alone does not make a product faster, secure, certified or production-ready. "
-             "6.x is the practical source/port/licensing baseline for THIS public PoC."))
-    add("The exact version, not a moving branch", "The linked 6.1.12 release is not the latest release",
-        table(["Input", "Finding / decision"], [
-            ["WICED reference", "SDK 3.1.0; ThreadX ver5.6; commit 0886ec932a063e12db768cd09428e8a8ab555bce"],
-            ["User's ThreadX link", "v6.1.12_rel, 2022-era Azure RTOS release"],
-            ["Selected new baseline", "v6.5.2.202603_rel, observed latest on 2026-10-11"],
-            ["Pinned source commit", e["threadx_sha"]],
-            ["License", "Current selected release: MIT; preserve upstream notices"]]),
-        p("Do not swap in the older tag while assuming its checked-in license text is the same. "
-          "The old tag contains hardware-linked Azure RTOS licensing language."),
-        code("git submodule update --init --recursive\n"
-             "git -C third_party/threadx rev-parse HEAD", "Reproduce the exact source selection"))
+    add("Change one thing per stage", "So every difference has exactly one cause",
+        table(["Step", "Kernel", "Core / ABI", "Application source"], [
+            ["Stage 1 → 2", "TX5.6 → TX6.5", "Cortex-M4 unchanged; soft-float → hard-float", "Unchanged"],
+            ["Stage 2 → 3", "TX6.5 unchanged", "Cortex-M4 → Cortex-M85", "Unchanged"],
+            ["Supplement", "TX6.5 unchanged", "Cortex-M55: newest core this QEMU runs", "Unchanged"]]),
+        bullets("Stage 1 → 2 isolates the RTOS migration on the core the TX5 kernel was built for.",
+                "Stage 2 → 3 isolates the CPU port change on an unchanged kernel release.",
+                "M55 shares the Armv8.1-M port family with M85, so it is the closest runnable proxy, "
+                "not a substitute for M85 execution."),
+        note("The float ABI change in stage 1 → 2 is forced by the TX5 archive, not chosen. "
+             "It is called out as its own diff later."))
+    add("ThreadX 5 and 6: what actually changes", "Same service model; different delivery, port contract and licence",
+        table(["Concern", "ThreadX 5.6 (WICED archive)", "ThreadX 6.5 (Eclipse)"], [
+            ["Delivery", "Headers + prebuilt GCC archive, no kernel source", "Full C source + CPU/toolchain ports"],
+            ["Licence", "Commercial; SDK copy restricted to WICED use", "MIT"],
+            ["Ports in this delivery", "One Cortex-M3/M4 port", "M4, M55, M85 and many more"],
+            ["Float ABI", "Soft-float; r4-r11 context only", "Hard-float; FPU context in the port"],
+            ["Thread start / handlers", "SVC; __tx_PendSVHandler, __tx_SVCallHandler", "PendSV; PendSV_Handler"],
+            ["Configuration", "Fixed by archive: errno extension, no error checking", "Rebuilt from tx_user.h"]]),
+        note("Rows are findings from this specific SDK archive and its headers. Other licensed TX5 "
+             "distributions may have been built with different options."))
+    add("Where the ThreadX 5 kernel comes from", "TX5 was never open source; the WICED SDK ships it as binaries",
+        bullets("The public WICED SDK 3.1.0 contains ThreadX 5.6 headers and ThreadX.ARM_CM4.release.a.",
+                "Its README restricts those objects to WICED use, so nothing from the SDK is in this repository.",
+                "The build links the archive from TX5_ROOT, a separate checkout; configuration fails if TX5_ROOT is inside the repository.",
+                "CI clones the same SDK commit into the runner's temp directory for every run."),
+        code(f"""
+            git clone --filter=blob:none --no-checkout \\
+                https://github.com/wwwllllllll/bcm-wiced-sdk.git $TX5_ROOT
+            git -C $TX5_ROOT sparse-checkout set --no-cone '/WICED/RTOS/ThreadX/'
+            git -C $TX5_ROOT checkout {tx5['wiced_commit']}
+            # ThreadX.ARM_CM4.release.a sha256:
+            # {tx5['archive_sha256']}
+        """, "Reproducible external dependency, identified by commit and hash"))
+    add("Reading a binary-only kernel", "No source, so inspect build attributes, symbols and machine code",
+        code("""
+            $ llvm-readelf -A tx_thread_create.o
+              CPU_name: Cortex-M4        CPU_arch: ARM v7E-M
+              ABI_enum_size: Packed      (no ABI_VFP_args, no FP_arch)
+            $ llvm-nm tx_thread_schedule.o
+              T __tx_PendSVHandler   T __tx_SVCallHandler
+              U tx_low_power_enter   U _tx_thread_system_stack_ptr
+            $ llvm-strings tx_thread_initialize.o
+              ThreadX Cortex-M3/GNU Version G5.6.5.2
+        """, "Actual inspection of the WICED ThreadX.ARM_CM4.release.a members"),
+        bullets("No VFP tag: the archive is soft-float, so every object in the image must be soft-float.",
+                "Packed enums: GCC -fshort-enums; Clang must match it.",
+                "The CM4 archive is the Cortex-M3 port: it never saves FPU registers.",
+                "Unresolved WICED hooks show exactly what the board layer must provide."))
+    add("The exact versions, not moving targets", "Every kernel input is pinned and identifiable",
+        table(["Input", "Identity"], [
+            ["TX5 kernel", f"ThreadX {tx5['version']}, WICED SDK 3.1.0 commit {tx5['wiced_commit'][:12]}"],
+            ["TX5 archive sha256", tx5["archive_sha256"]],
+            ["TX6 kernel", "Eclipse ThreadX v6.5.2.202603_rel, latest observed on 2026-10-11"],
+            ["TX6 commit", e["threadx_sha"]],
+            ["Compiler", e["compiler"]],
+            ["Emulator", e["qemu"]]]),
+        note("The originally linked v6.1.12_rel tag carries Azure RTOS hardware-linked licence text in its "
+             "own tree; it is not substituted for the MIT release."))
     add("Cortex-M4, M55 and M85", "Keep CPU architecture distinct from a particular microcontroller",
         table(["Property", "Cortex-M4", "Cortex-M55", "Cortex-M85"], [
             ["Architecture", "Armv7E-M", "Armv8.1-M", "Armv8.1-M"],
             ["DSP / vectors", "Scalar DSP extensions", "Helium / MVE", "Helium / MVE"],
             ["Floating point", "Optional single precision", "Configuration-dependent FP/MVE", "Configuration-dependent FP/MVE"],
-            ["Security model", "No Armv8-M TrustZone", "Armv8-M TrustZone", "TrustZone; PACBTI capability/configuration"],
-            ["This proof", "QEMU MPS2 AN386 run", "QEMU MPS3 AN547 run", "Compile/link only"]]),
+            ["Security model", "No Armv8-M TrustZone", "Armv8-M TrustZone", "TrustZone; PACBTI capability"],
+            ["This proof", "TX5 and TX6 run on MPS2 AN386", "TX6 run on MPS3 AN547", "TX6 compile/link only"]]),
         note("Core IP features and SoC implementations vary. A new core does not bring the old "
-             "STM32F4 GPIO, clocks, memory addresses, DMA or board wiring with it."))
-    add("Compatibility stops at the hardware boundary", "Portable C is only one layer of an RTOS migration",
-        bullets("Recompile all RTOS-facing code and control blocks; never relink a CM4 binary on the strength of API names.",
-                "Match CPU, Thumb ISA, float ABI, kernel flags and stack alignment across every translation unit.",
-                "Verify exception return, PSP/MSP context, IRQ priorities and SysTick routing.",
-                "Plan the SoC linker map, VTOR, caches/TCM, MPU, TrustZone and DMA coherency separately.",
-                "Test FPU/MVE task switching and security state on real M85 hardware before claiming those paths."),
-        code("""
-            -mcpu=cortex-m4   # same-release control build
-            -mcpu=cortex-m55  # executable QEMU proof
-            -mcpu=cortex-m85  # compile/link proof only
-            # common: --target=arm-none-eabi -mthumb -mfloat-abi=hard
-        """, "Compiler target change, not a complete BSP port"))
+             "board's GPIO, clocks, memory addresses, DMA or wiring with it."))
     add("The most modern runnable QEMU Cortex-M here", "Probe the installed executable instead of relying on development docs",
         code("""
             qemu-system-arm --version
             qemu-system-arm -machine help
             qemu-system-arm -cpu help
             # installed: 11.1.0
-            # present: mps3-an547 / cortex-m55
+            # present: mps2-an386 / cortex-m4, mps3-an547 / cortex-m55
             # absent:  mps3-an555 / cortex-m85
         """, "Actual local inventory, saved in evidence/qemu-*.txt"),
         p("M55 is the newest Cortex-M CPU exposed by this installed QEMU build. "
-          "QEMU development documentation mentions AN555, but it is not available in the tested binary."),
-        note("We never run an M85 image under an M55 CPU and label it M85. "
+          "QEMU development documentation mentions AN555, but it is not in the tested binary."),
+        note("An M85 image is never run under an M55 CPU and labelled M85. "
              "The M85 ELF remains a separate, explicitly unexecuted build artifact."))
-    add("Licensing is an engineering input", "Public GitHub visibility does not imply permission to redistribute",
-        bullets("The supplied GPIO .c and .mk files explicitly carry proprietary Broadcom notices.",
-                "The SDK README says its ThreadX / NetX objects are free for WICED use only.",
-                "No proprietary GPIO file, TX5 archive, Wi-Fi firmware or restricted vendor stack is included.",
-                "The new demo is independently written to preserve the LED/button behavior.",
-                "Original work uses MIT; the pinned ThreadX source retains its upstream MIT license.",
-                "PDF typography embeds open-source Roboto fonts under OFL 1.1, with notices shipped beside the PDF.",
-                "Clang and QEMU are external tools, not firmware components relicensed as MIT."),
-        note("This proves the migration approach on shareable code. It does not claim the complete old "
-             "WICED SDK is OSS or that a technical audit replaces legal review."))
-    add("The source trees tell the migration story", "Remove a binary dependency; preserve a narrow behavioral contract",
-        fig("source-trees", "Historical tree is descriptive only. The old Broadcom source and binaries are not redistributed."),
-        note("One pinned RTOS dependency; original application, startup, adapter, build scripts and evidence are reviewable."))
-    add("Upgrade in separate dimensions", "Avoid attributing an OS change to a CPU change",
-        fig("workflow", "Control: ThreadX 6 on M4. New runtime proof: same ThreadX 6 on M55. M85: same source, separate port build."),
-        p("The TX5 reference is a behavior/source-inventory baseline, not a runnable benchmark baseline. "
-          "Separating the dimensions makes the remaining hardware work visible."))
+    add("Licensing is an engineering input", "Public on GitHub does not mean free to redistribute",
+        bullets("The WICED SDK README limits its ThreadX / NetX objects to use with WICED.",
+                "The TX5 archive and headers are linked from an external checkout and never committed or published.",
+                "The application, board layer, adapter and tests are independently written; original work is MIT.",
+                "ThreadX 6.5 is pinned as an MIT submodule with its upstream notices.",
+                "PDF typography embeds Roboto under OFL 1.1, with the notice shipped beside the PDF."),
+        note("This is an engineering demonstration, not a legal opinion on WICED licence scope. "
+             "Product use of a TX5 kernel needs its own licence."))
+    add("The source trees", "The TX5 kernel stays outside; the repository holds only original work",
+        fig("source-trees", "Left: what TX5_ROOT must contain. Right: the public repository."),
+        note("TX5-only and TX6-only files are small and named for their stage: one adapter, "
+             "one board hook, one tx_user.h."))
+    add("Migration workflow", "Change one dimension at a time",
+        fig("workflow", "Kernel first on the original core, then the core on the new kernel."),
+        p("Stages 1 and 2 give a like-for-like Cortex-M4 run on each kernel. "
+          "Stage 3 then needs only the CPU port change."))
     add("What really executes", "No mock RTOS, no fake emulator success",
-        fig("architecture", "Clang-built ARM firmware uses real ThreadX scheduler and service code under QEMU."),
+        fig("architecture", "Clang-built firmware runs the real TX5.6 or TX6.5 scheduler under QEMU."),
         note("The board adapter virtualizes two LEDs and deterministic active-low buttons. "
              "It does not emulate or access a physical GPIO controller."))
-    add("Diff 1: RTOS delivery and build", "A conceptual integration diff, not copied proprietary SDK code",
+    add("Diff 1: how each kernel enters the build", "Imported binary archive vs rebuilt source",
         code("""
-            - RTOS input: opaque ThreadX.ARM_CM4.release.a
-            - Toolchain: vendor SDK make + legacy GNU assumptions
-            + RTOS input: pinned third_party/threadx/common + selected CPU port
+            # Stage 1: cmake/tx5-wiced-adapter.cmake
+            - add_library(threadx STATIC IMPORTED GLOBAL)
+            - IMPORTED_LOCATION  ${TX5_ROOT}/.../ThreadX.ARM_CM4.release.a
+            - INTERFACE_COMPILE_DEFINITIONS  TX_INCLUDE_USER_DEFINE_FILE
+            - include dirs: ver5.6/ and ver5.6/Cortex_M3_M4/GCC/
+            # Stages 2-3: CMakeLists.txt
+            + set(THREADX_ARCH ${TX_CORE})        # cortex_m4 / m55 / m85
+            + set(TX_USER_FILE config/tx6/tx_user.h)
             + add_subdirectory(third_party/threadx)
-            + target_link_libraries(threadx_gpio_demo PRIVATE threadx)
-            + Clang C + integrated assembler + LLD
-            + --target=arm-none-eabi -mcpu=<selected core>
-        """, "Build-layer migration, representative rather than an applied WICED patch"),
-        p("Source rebuild avoids mixing TX5 headers with TX6 object layouts. Kernel configuration "
-          "comes from a single tx_user.h shared by the library and application."))
-    add("Diff 2: task lifecycle is explicit", "Initialize static objects before allowing the scheduler to run",
+            # all stages
+              target_link_libraries(threadx_gpio_demo PRIVATE threadx)
+        """, "Actual build integration; the application target is identical"),
+        p("With source, the kernel is recompiled for the application's ABI and configuration. "
+          "With a binary, the application must adopt the archive's ABI and configuration instead."))
+    add("Diff 2: the float ABI is dictated by the archive", "Hard-float objects cannot link against this TX5 kernel",
         code("""
-            - application behavior entered through vendor SDK startup
-            + int main(void) { tx_kernel_enter(); /* never returns */ }
-            + void tx_application_define(void *unused) {
-            +     tx_thread_create(&led_thread, "gpio-led-demo",
-            +         led_thread_entry, 0, led_thread_stack,
-            +         sizeof led_thread_stack, 5, 5,
-            +         TX_NO_TIME_SLICE, TX_AUTO_START);
-            + }
-        """, "Representative lifecycle diff; implementation checks every creation status"),
-        bullets("Lower numeric priority is higher priority in ThreadX.",
-                "Stack storage is static and aligned as ULONG; lifetime exceeds the task.",
-                "Application and RTOS objects are freshly compiled, not ABI-reused."))
-    add("Diff 3: milliseconds versus RTOS ticks", "Keep units visible; avoid a silent tenfold or hundredfold delay error",
+            # cmake/clang-arm-none-eabi.cmake
+            - TX5: -mcpu=cortex-m4 -mthumb -mfloat-abi=soft -fshort-enums
+            + TX6: -mcpu=cortex-m4 -mthumb -mfloat-abi=hard
+            # TX5.6 PendSV: integer context only
+              mrs   r12, psp
+              stmdb r12!, {r4-r11}       @ no s16-s31, no lazy FP state
+              ...
+              mvn   lr, #2               @ EXC_RETURN 0xFFFFFFFD
+        """, "Toolchain change plus disassembly of __tx_ts_handler in the archive"),
+        bullets("A hard-float task on this TX5 port would break: it saves no s16-s31 and always returns with a non-FP EXC_RETURN.",
+                "Stage 2 is therefore also the first point where FPU code becomes safe on M4.",
+                "The image attributes confirm it: TX5 has no FP_arch tag; TX6 M4 has VFPv4-D16 and AAPCS VFP."))
+    add("Diff 3: vectors and the first context switch", "TX5.6 starts threads through SVC, TX6 does not",
         code("""
-            - delay API accepts 250 milliseconds
-            + #define TX_TIMER_TICKS_PER_SECOND 100
-            + #define LED_UPDATE_TICKS 25U
-            + tx_thread_sleep(LED_UPDATE_TICKS);   // 250 ms virtual time
-            + SysTick reload = DEMO_CLOCK_HZ / 100 - 1
-            + SysTick_Handler -> _tx_timer_interrupt
-        """, "Timing integration diff, plus a measured tick invariant"),
+            # TX5.6 _tx_thread_schedule (from the archive)
+              str   r1, [r0, #0x10]      @ SysTick CTRL |= ENABLE
+              cpsie i
+              svc   #0                   @ first thread starts in SVCall
+            # src/startup.S vector table
+            - .word DEMO_SVC_HANDLER     @ TX5: __tx_SVCallHandler
+            - .word DEMO_PENDSV_HANDLER  @ TX5: __tx_PendSVHandler
+            + .word DEMO_SVC_HANDLER     @ TX6: fault_handler (unused)
+            + .word DEMO_PENDSV_HANDLER  @ TX6: PendSV_Handler
+        """, "Handler names are per-stage CMake defaults, validated as plain symbols"),
+        note("Leaving SVC at the TX6 default fault handler makes TX5 hang before the first thread runs. "
+             "The verifier treats that as a timeout failure."))
+    add("Diff 4: low-level init and the idle hook", "Contracts recovered from disassembly, implemented in MIT code",
+        code("""
+            void _tx_initialize_low_level(void) {
+                _tx_initialize_unused_memory = &__first_free_ram;
+            #ifdef DEMO_TX5
+            -   _tx_thread_system_stack_ptr = (void *)demo_vectors[0];
+            #endif
+                /* VTOR, SHPR2/3 priorities, 100 Hz SysTick: shared */
+            }
+            - unsigned long platform_power_down_hook(unsigned long ticks) {
+            -     __asm volatile("wfi");
+            -     return 0UL;        /* ticks slept; SysTick kept running */
+            - }
+        """, "src/tx_initialize_low_level.c and src/tx5_wiced_port.c"),
+        bullets("The TX5 port objects reference _tx_thread_system_stack_ptr; the TX6 Cortex-M4 port sources do not use it.",
+                "The WICED idle loop calls tx_low_power_enter, which calls platform_power_down_hook(ticks to next timer).",
+                "A non-zero return is added to the kernel clock (tickless mode). Returning 0 keeps normal ticking."))
+    add("Diff 5: a 4-byte configuration bug", "Found by the metrics, then made impossible to build",
+        code("""
+            [metric] sizeof_TX_THREAD=176        <- application's view
+            _tx_thread_create:  movs r2, #0xb4   <- archive clears 180 B
+                                bl   memset
+            [metric] led_stack_high_water_bytes=1024   <- impossible
+            # cause: -Iinclude found the TX6 tx_user.h before WICED's,
+            #        dropping "#define TX_THREAD_USER_EXTENSION int errno;"
+            + move TX6 config to config/tx6/tx_user.h
+            + _Static_assert(sizeof(TX_THREAD) == 180U, ...);
+            [metric] sizeof_TX_THREAD=180   led_stack_high_water_bytes=196
+        """, "Actual first Stage 1 run, root cause and fix"),
+        p("The kernel cleared 4 bytes past each 176-byte thread object. led_thread_stack follows "
+          "led_thread in RAM, so its first fill word was zeroed and the stack scan reported a full stack. "
+          "The functional test still passed: only the measurement exposed the corruption."),
+        note("With a binary kernel, the header configuration is part of the ABI. "
+             "It must be the configuration the archive was built with, and it should be asserted."))
+    add("Diff 6: API and configuration details", "Small differences that break builds or change behaviour",
+        table(["Item", "TX5.6 archive", "TX6.5 build here"], [
+            ["_tx_version_id", "extern const CHAR[]", "extern CHAR[]"],
+            ["Thread extension", "int errno; (WICED tx_user.h)", "None"],
+            ["Error checking", "Disabled in release archive", "Enabled (txe_ wrappers)"],
+            ["Preemption-threshold", "Disabled", "Enabled"],
+            ["Timer expiry", "Processed in the SysTick ISR", "System timer thread (default)"],
+            ["Stack checking", "Off; stacks still filled with 0xEF", "On"]]),
+        bullets("The application dropped its own _tx_version_id declaration and uses the port header's.",
+                "Stack high-water is measured by scanning the 0xEF fill, which works on both kernels.",
+                "Thread resumption is checked with an application flag, not scheduler internals."))
+    add("Diff 7: milliseconds versus RTOS ticks", "Keep units visible; avoid a silent tenfold delay error",
+        code("""
+            #define TX_TIMER_TICKS_PER_SECOND 100   // tick rate used by both stages
+            #define LED_UPDATE_TICKS 25U
+            tx_thread_sleep(LED_UPDATE_TICKS);      // 250 ms virtual time
+            SysTick reload = DEMO_CLOCK_HZ / 100 - 1
+            SysTick_Handler -> _tx_timer_interrupt  // same symbol in TX5 and TX6
+        """, "Timing integration, plus a measured tick invariant"),
         p("The tested board clock constants are 25 MHz for MPS2-M4 and 32 MHz for MPS3-M55. "
-          "The M85 build reuses the demonstration map/clock; a real M85 SoC must replace them."),
+          "The M85 build reuses the demonstration map and clock; a real M85 SoC must replace them."),
         note("QEMU icount is synthetic: 128 ns per emulated instruction. "
              "The tick invariant is a scheduler test, not a physical time or jitter guarantee."))
-    add("Diff 4: preserve the held-button latch", "A subtle behavioral detail, checked at release as well as press",
+    add("Diff 8: preserve the held-button latch", "A subtle behavioural detail, checked at release as well as press",
         code("""
             - toggle the same boolean even while the button is held
             + if (!button0) toggle0 = !toggle0;
@@ -368,164 +472,160 @@ def slides(e):
             # cycle 1: latch OFF / output OFF
             # cycles 2-3: latch unchanged / held button forces ON
             # cycle 4: button released / next toggle yields ON
-        """, "Actual correction in the new application, not a TX5 kernel diff"),
-        p("The reference behavior pauses the toggle latch while the button is held. "
-          "An implementation that merely sets the latch true while held changes the release behavior."),
+        """, "Application behaviour, identical on every stage"),
         note("The verifier deliberately rejects a cycle-4 OFF result."))
-    add("Diff 5: startup assembly under Clang", "A real encountered failure, with a trace-supported fix",
+    add("Diff 9: startup assembly under Clang", "A real encountered failure, with a trace-supported fix",
         code("""
             - sub r2, r2, r1   // Clang emitted sub.w, without updating flags
             - beq copy_done    // branches on stale flags
-            - sub r2, r2, #1   // same hidden flag dependency
-            - bne copy_loop    // loop fails to terminate
             + copy_loop:
             +     cmp r1, r2   // explicit end-pointer comparison
             +     bhs copy_done
             +     ldrb r3, [r0], #1
             +     strb r3, [r1], #1
             +     b copy_loop
-        """, "Compared to the current MIT upstream example startup, not Broadcom source"),
-        p("QEMU traced a precise bus fault at 0x00080000 during the endless startup copy. "
-          "The replacement has explicit comparisons, copies .data, clears .bss, and enables CP10/CP11."),
-        note("Changing compiler is not just changing an executable name. Assembly flag semantics need testing."))
-    add("Diff 6: one security mode and one ABI", "Scope down the first proof; make omitted features explicit",
+        """, "Compared with the upstream TX6 example startup, not Broadcom source"),
+        p("QEMU traced a bus fault at 0x00080000 during the endless startup copy. "
+          "The replacement uses explicit comparisons, copies .data, clears .bss and enables CP10/CP11."))
+    add("Diff 10: TX6 security mode and BSP scope", "Scope down the first proof; make omitted features explicit",
         code("""
-            + // include/tx_user.h: compiled into kernel AND application
+            # config/tx6/tx_user.h
             + #define TX_SINGLE_MODE_SECURE
             + #define TX_TIMER_TICKS_PER_SECOND 100
             + #define TX_ENABLE_STACK_CHECKING
-            + // no secure/non-secure task transitions in this demo
-            + // use hard-float ABI consistently; enable CP10/CP11 at reset
-        """, "Actual demonstrator configuration"),
-        bullets("Single-secure avoids falsely exercising secure-stack allocation paths without a non-secure image.",
-                "Hard-float compile/link is established; dedicated mixed FPU/MVE context stress remains pending.",
-                "SVC is unused in this configuration; PendSV handles context switching.",
-                "Do not infer a TrustZone security policy from a successful boot."))
-    add("Diff 7: IRQ, vectors and memory belong to the BSP", "Minimal executable map now; production SoC map later",
+            # boards/qemu.ld (all stages)
+              CODE 0x00000000 512 KiB, RAM 0x20000000 32 KiB
+              system stack 2048 B, 8-byte aligned; VTOR = demo_vectors
+              PendSV/SVC priority 0xff, SysTick 0x40
+        """, "Demonstrator configuration, not a production M85 BSP"),
+        bullets("Single-secure avoids exercising secure-stack paths without a non-secure image.",
+                "Do not infer a TrustZone security policy from a successful boot.",
+                "A real M85 SoC has its own memory map, clocks, IRQ routing, caches and MPU."))
+    add("Diff 11: success is a checked contract", "Fail on missing, wrong or partial output",
         code("""
-            + .vectors: initial MSP, Reset, faults, PendSV, SysTick
-            + VTOR = address of demo_vectors
-            + PendSV priority = 0xff; SysTick priority = 0x40
-            + CODE: 0x00000000, 512 KiB
-            + RAM:  0x20000000, 32 KiB
-            + system stack: 2048 bytes, 8-byte aligned
-            + linker ASSERT: reserved RAM must fit
-        """, "boards/qemu.ld + src/startup.S + src/tx_initialize_low_level.c"),
-        note("These are demonstrator settings, not a claimed M85 board port. "
-             "A Cortex-M85 core can appear in SoCs with different memory, clocks, controllers and IRQ routing."))
-    add("Diff 8: success becomes a checked contract", "Fail on missing, wrong or partial output",
-        code("""
-            - visually inspect a blinking LED and assume migration works
-            + verify CPUID part number and RTOS version
+            + require exactly one banner version, equal to the stage's
+            +     TX5: G5.6.5.2      TX6: 6.5.2.202603
+            + verify the CPUID part number for the requested core
             + require queue / event / semaphore / mutex / pool self-test PASS
-            + check all 10 button + LED rows
-            + require 9 intervals of exactly 25 virtual ticks
+            + check all 10 button + LED rows and 9 intervals of 25 ticks
             + require explicit completion and QEMU exit status 0
             + reject timeout, wrong identity, wrong state or partial log
-        """, "tests/run_qemu.py + 11 verifier unit tests"),
-        p("One positive verifier fixture plus ten deliberately corrupted fixtures pass their expected assertions. "
-          "The firmware's real run is tested separately through CTest."))
-    add("The RTOS services really switch tasks", "A higher-priority worker must suspend, resume and signal",
+        """, "tests/run_qemu.py + 15 verifier unit tests"),
+        p("A TX6 image cannot pass as a TX5 run: the expected version is per stage and must match exactly. "
+          "CMake also refuses a TX5 build on any core but M4, or with TX5_ROOT inside the repository."))
+    add("The RTOS services really switch tasks", "A higher-priority worker must preempt, suspend, resume and signal",
         code("""
             // LED task priority 5; worker priority 4
-            worker: tx_queue_receive(&queue, &value, TX_WAIT_FOREVER);
-                    assert(value == 0x1234);
+            worker: worker_progress = 1;
+                    tx_queue_receive(&queue, &value, TX_WAIT_FOREVER);
+                    worker_progress = 2;
                     tx_event_flags_set(&flags, 1, TX_OR);
-            LED:    tx_queue_send(&queue, &message, TX_NO_WAIT);
-                    tx_event_flags_get(&flags, 1, TX_OR_CLEAR,
-                                       &actual, TX_NO_WAIT);
-            // observed: worker_thread_runs = 2; led_thread_runs = 12
+            LED:    require(worker_progress == 1);   // preempted, then suspended
+                    tx_queue_send(&queue, &message, TX_NO_WAIT);
+                    require(worker_progress == 2);   // resumed by the send
+            // observed on all three runtime images:
+            //   worker_thread_runs = 2; led_thread_runs = 12
         """, "Condensed from the independently written service self-test"),
-        bullets("Worker creation preempts the LED task; an empty queue suspends the worker.",
-                "Sending the payload resumes the worker; the event proves execution reached the receiver.",
-                "The timer wakes the sleeping LED task nine times through the real ThreadX timer path.",
-                "Mutex and pool checks are basic operations, not exhaustive contention/fragmentation stress."))
-    add("Replay the verified LED run", "Recorded QEMU evidence, not a browser-side ARM emulator",
+        bullets("The progress flag is application state, so the check does not depend on TCB internals.",
+                "The timer wakes the sleeping LED task nine times through each kernel's real timer path.",
+                "Mutex and pool checks are basic operations, not contention or fragmentation stress."))
+    add("Replay the verified LED run", "Recorded Stage 1 QEMU evidence, not a browser-side emulator",
         block("replay"),
-        p("Two buttons are scripted active-low inputs. Buttons force their paired LED on while held; "
+        p("Two buttons are scripted active-low inputs. A held button forces its LED on; "
           "the paused toggle resumes after release. Step through cycles 0–9."),
-        note("The replay data is embedded from evidence/m55-run.json, after the host verifier accepted it."))
-    add("A visible runtime result", "Cortex-M55 console evidence from the final measured image",
-        code((ROOT / "evidence/m55-console.txt").read_text(encoding="utf-8"),
+        note("Embedded from evidence/tx5-m4-run.json. The generator checks that the TX6 M4 and M55 "
+             "runs produced identical rows."))
+    add("Console evidence: Stage 1, ThreadX 5.6", "Cortex-M4, prebuilt WICED kernel",
+        code((ROOT / "evidence/tx5-m4-console.txt").read_text(encoding="utf-8"),
              "Actual QEMU console, not generated example output"))
-    add("Memory chart: linked ROM", "Clang -O3; same RTOS release, same app and service tests",
-        fig("rom", "ROM = .vectors + .text (including constants) + .ARM.exidx + .data load image."),
-        p(f'M4: {b["m4"]["rom_bytes"]:,} B; M55: {b["m55"]["rom_bytes"]:,} B; '
-          f'M85 compile-only: {b["m85"]["rom_bytes"]:,} B.'),
-        note("No TX5 size delta is claimed. These are actual ELF sections for this instrumented workload, "
-             "not marketing estimates or minimum kernel footprints."))
+    add("Console evidence: Stage 2, ThreadX 6.5", "Same Cortex-M4, same application, new kernel",
+        code((ROOT / "evidence/m4-console.txt").read_text(encoding="utf-8"),
+             "Actual QEMU console, not generated example output"),
+        note("Only the banner and stack high-water differ from Stage 1. Every LED row and tick is identical."))
+    add("Memory chart: linked ROM", "Clang -O3; same application and service tests on every image",
+        fig("rom", "ROM = .vectors + .text + .ARM.exidx + .data load image."),
+        p(f'TX5 M4: {b["tx5-m4"]["rom_bytes"]:,} B; TX6 M4: {b["m4"]["rom_bytes"]:,} B '
+          f'(+{b["m4"]["rom_bytes"] - b["tx5-m4"]["rom_bytes"]:,} B); '
+          f'TX6 M85: {b["m85"]["rom_bytes"]:,} B; TX6 M55: {b["m55"]["rom_bytes"]:,} B.'),
+        note("The TX5→TX6 delta is not pure kernel growth: the TX6 build enables error checking, "
+             "preemption-threshold and a system timer thread, which the WICED release archive leaves out."))
     add("Memory chart: reserved RAM", "Include stacks and test infrastructure, not only global data",
-        fig("ram", "RAM = .data + .bss + 2 KiB system stack. Static task stacks are already inside .bss."),
-        p("The M4 and M55 runtime report sizeof(TX_THREAD) = 180 bytes in this build configuration. "
-          "That observation is not permission to treat every TX5 or differently configured TCB as ABI-compatible."))
-    add("Stack headroom is measured, not assumed", "Useful early evidence; not production stack qualification",
-        fig("stack", "Observed LED thread stack high-water under the test workload; 1024 bytes reserved."),
-        note("Values are ThreadX stack-check samples. Production worst-case paths, nested interrupts, "
-             "FPU/MVE context and M85 behavior still require stress and hardware validation."))
-    add("Performance chart: emulator test cost", "Measure what was actually run, and state what the number means",
-        fig("host-cost", "Eight alternating QEMU runs per core on this Windows host, using deterministic icount."),
-        note("These host durations include launch, TCG, virtual sleeps, self-tests and console I/O. "
-             "They do not measure M4/M55 throughput, context-switch cycles, interrupt latency or M85 speed."))
+        fig("ram", "RAM = .data + .bss + 2 KiB system stack. Static task stacks are inside .bss."),
+        p(f'TX5 M4: {b["tx5-m4"]["ram_reserved_bytes"]:,} B; TX6 M4: {b["m4"]["ram_reserved_bytes"]:,} B. '
+          "TX6 adds a system timer thread and its stack; TX5 processes timers in the ISR. "
+          "sizeof(TX_THREAD) happens to be 180 bytes on both kernels with these configurations."))
+    add("Stack headroom is measured, not assumed", "The same fill-pattern scan on both kernels",
+        fig("stack", "Deepest LED-thread stack write under the test workload; 1024 bytes reserved."),
+        p(f"TX5 M4 {hw['tx5-m4']} B, TX6 M4 {hw['m4']} B, TX6 M55 {hw['m55']} B. "
+          "Differences come from the ABI, compiler code generation and each port's stack frame; "
+          "they are not attributed to one cause."),
+        note("Production worst-case paths, nested interrupts, FPU/MVE context and M85 behaviour "
+             "still require stress and hardware validation."))
+    add("Performance chart: emulator test cost", "Measure what was run, and say what the number means",
+        fig("host-cost", "Eight interleaved QEMU runs per image on this Windows host, using deterministic icount."),
+        note("TX5 looks faster because its idle hook executes WFI, which QEMU skips to the next timer, while "
+             "TX6 idles in a spin loop that QEMU must emulate. This is idle strategy, not kernel speed."))
     add("Histogram: repeatability of the host harness", "Samples are retained, not reduced to an unexplained mean",
         fig("host-histogram", "Every plotted sample is in evidence/summary.json."),
-        p("Use this to budget an automated test job and spot test-host variability. "
-          "Do not turn the median difference into a CPU performance claim."))
-    add("Histogram: scheduler timing contract", "144 measured intervals, all at the requested 25 ticks",
-        fig("tick-histogram", "8 runs × 9 intervals × 2 cores = 144 intervals, all 25 virtual ticks."),
-        note("The 100 Hz tick gives 250 ms in the configured virtual-time model. "
-             "Tick quantization and synthetic instruction time cannot establish physical sub-tick jitter."))
+        p("Use this to budget an automated test job and spot host variability. "
+          "Do not turn the median differences into CPU or kernel performance claims."))
+    add("Histogram: scheduler timing contract", f"{total_intervals} measured intervals, all at the requested 25 ticks",
+        fig("tick-histogram", f"8 runs × 9 intervals × 3 images = {total_intervals} intervals."),
+        note("The 100 Hz tick gives 250 ms in the configured virtual-time model on both kernels. "
+             "Synthetic instruction time cannot establish physical sub-tick jitter."))
     add("What the M85 build proves", "Correct target attributes and resolved symbols, not execution",
         code("""
             llvm-readelf -A build/m85/threadx_gpio_demo.elf
             CPU_name: cortex-m85
             CPU_arch: ARM v8.1-M Mainline
-            ABI_VFP_args: AAPCS VFP
+            FP_arch:  ARMv8-a FP-D16      ABI_VFP_args: AAPCS VFP
             MVE_arch: MVE integer and float
             llvm-nm --undefined-only build/m85/threadx_gpio_demo.elf
             # no undefined symbols
         """, "Actual attribute inspection; build uses upstream ports/cortex_m85/gnu"),
-        p("This establishes that Clang compiled and LLD linked the application with the M85 port. "
-          "The demo linker/clock are not a production M85 SoC definition."),
+        p("Clang compiled and LLD linked the unchanged application with the M85 port. "
+          "The demo linker map and clock are not a production M85 SoC definition."),
         note("There is no M85 runtime, performance, power, PACBTI or mixed FPU/MVE correctness result."))
-    add("The hardware acceptance gate", "Turn this PoC into a product migration with explicit tests",
+    add("The hardware acceptance gate", "Turn this proof into a product migration with explicit tests",
         table(["Workstream", "Required evidence before production"], [
-            ["Board / SoC", "Vendor-approved startup, linker map, GPIO polarity, clock tree, IRQ map"],
-            ["Context / ABI", "Stress preemption + nested IRQ + mixed scalar/FPU/MVE tasks; inspect saved context"],
-            ["Security", "TrustZone policy, secure gateways/stacks, MPU and optional PACBTI configuration"],
-            ["Performance", "On-silicon cycles, IRQ latency distribution, deadline/WCET, throughput and energy"],
-            ["Application", "Regression suite for peripheral, network, watchdog and low-power interactions"],
+            ["Board / SoC", "Vendor startup, linker map, GPIO polarity, clock tree, IRQ map"],
+            ["Context / ABI", "Preemption + nested IRQ + mixed scalar/FPU/MVE tasks; inspect saved context"],
+            ["Security", "TrustZone policy, secure gateways/stacks, MPU and optional PACBTI"],
+            ["Performance", "On-silicon cycles, IRQ latency, deadline/WCET, throughput and energy, TX5 vs TX6"],
+            ["Application", "Peripheral, network, watchdog and low-power regression, incl. tickless idle"],
             ["Governance", "Licensing, SBOM, safety/change-impact assessment, traceable requirements"]]),
-        note("The LED PoC reduces feasibility risk. It is not a claim that Wi-Fi, TLS, OTA, "
+        note("The proof reduces feasibility risk. It does not claim that Wi-Fi, TLS, OTA, "
              "safety certification or all application deadlines have migrated."))
-    add("Reproduce the result", "Public source, pinned dependency, raw evidence and automated checks",
+    add("Reproduce the result", "Public source, pinned dependencies, raw evidence and automated checks",
         code("""
             git clone --recurse-submodules https://github.com/zuwasi/TX5-upgrade.git
-            cd TX5-upgrade
-            cmake --preset m4 && cmake --build --preset m4
-            cmake --preset m55 && cmake --build --preset m55
-            cmake --preset m85 && cmake --build --preset m85
-            ctest --test-dir build/m4 --output-on-failure
-            ctest --test-dir build/m55 --output-on-failure
+            # fetch the external SDK into TX5_ROOT (see README), then:
+            cmake --preset tx5-m4  && cmake --build --preset tx5-m4
+            cmake --preset tx6-m4  && cmake --build --preset tx6-m4
+            cmake --preset tx6-m85 && cmake --build --preset tx6-m85
+            cmake --preset m55     && cmake --build --preset m55
+            ctest --test-dir build/tx5-m4 ; ctest --test-dir build/m4
+            ctest --test-dir build/m55
             python -m unittest discover -s tests -p test_verifier.py -v
             python scripts/collect_evidence.py --repeats 8
         """, "Tools: Clang/LLVM, LLD, CMake, Ninja, Python and ARM QEMU"),
-        p("The GitHub workflow uses a Linux package toolchain, so CI tool versions may differ from "
-          "the recorded Windows Clang 22.1.3 / QEMU 11.1.0 measurements. Local evidence lists exact versions."),
+        p("GitHub CI runs all four images, including Stage 1 against a fresh SDK clone. "
+          "CI uses Linux packaged tools, so versions may differ from the recorded Windows run."),
         note("Only run firmware you trust with host semihosting enabled."))
     add("The technical conclusion", "A bounded yes, backed by executable evidence",
-        bullets("YES: the legacy GPIO behavior is implementable on current MIT ThreadX.",
-                "YES: the same application and service tests execute on M4 and modern M55 QEMU targets.",
-                "YES: Clang compiles and links the same application using the upstream Cortex-M85 port.",
-                "NOT YET: M85 runtime and real-board BSP / timing / security qualification.",
-                "NEXT: choose the actual M85 SoC and run the hardware acceptance suite."),
-        note("Approve a hardware migration spike with measurable exit criteria, "
-             "rather than treating a successful LED demo as a full-product release."),
+        bullets("YES: the application runs unchanged on the real ThreadX 5.6 Cortex-M4 kernel and on ThreadX 6.5.",
+                "YES: behaviour, service checks and every tick match between TX5 and TX6 on the same core.",
+                "YES: the same application compiles and links with the upstream Cortex-M85 port.",
+                "LEARNED: with a binary kernel, its ABI and header configuration are part of the contract.",
+                "NOT YET: M85 runtime and real-board BSP / timing / security qualification."),
+        note("Next: choose the target M85 SoC and run the hardware acceptance suite, "
+             "including a TX5-vs-TX6 cycle comparison on M4 silicon if that baseline matters."),
         p("Public source: github.com/zuwasi/TX5-upgrade\n"
           "Presentation: zuwasi.github.io/Public-html-pages/tx5-upgrade/"))
     add("Sources and evidence trail", "Primary references and local measured artifacts",
         block("sources", items=[
-            ("Historical WICED SDK", "https://github.com/wwwllllllll/bcm-wiced-sdk"),
-            ("Historical GPIO behavior reference", "https://github.com/wwwllllllll/bcm-wiced-sdk/tree/master/apps/snip/gpio"),
+            ("WICED SDK 3.1.0 (external TX5 kernel source)", "https://github.com/wwwllllllll/bcm-wiced-sdk"),
+            ("WICED GPIO behaviour reference", "https://github.com/wwwllllllll/bcm-wiced-sdk/tree/master/apps/snip/gpio"),
             ("Originally linked ThreadX release", "https://github.com/eclipse-threadx/threadx/tree/v6.1.12_rel"),
             ("Selected release", "https://github.com/eclipse-threadx/threadx/tree/v6.5.2.202603_rel"),
             ("ThreadX release history", "https://github.com/eclipse-threadx/threadx/releases"),
@@ -535,11 +635,12 @@ def slides(e):
             ("Arm Helium", "https://www.arm.com/technologies/helium"),
             ("QEMU MPS2/MPS3 development docs", "https://qemu-project.gitlab.io/qemu/system/arm/mps2.html"),
             ("Raw measurements", "evidence/summary.json"),
-            ("M55 verified console", "evidence/m55-console.txt"),
-            ("M4 verified console", "evidence/m4-console.txt"),
+            ("Stage 1 TX5 M4 console", "evidence/tx5-m4-console.txt"),
+            ("Stage 2 TX6 M4 console", "evidence/m4-console.txt"),
+            ("Supplement M55 console", "evidence/m55-console.txt"),
         ]),
-        note("License/source inventory was checked on 2026-10-11. Runtime evidence includes exact "
-             "compiler, emulator version, image hashes and the virtual-time model."))
+        note("Source and licence inventory checked on 2026-10-11. Runtime evidence records the exact "
+             "compiler, emulator version, image and archive hashes and the virtual-time model."))
     return s
 
 
@@ -574,7 +675,7 @@ def render_block(b):
         return '<div id="toc" class="toc"></div>'
     if kind == "replay":
         return """<div class="replay" aria-label="Recorded QEMU LED evidence replay">
-          <div class="replay-top"><strong>QEMU M55 · verified recording</strong>
+          <div class="replay-top"><strong>QEMU Cortex-M4 · ThreadX G5.6.5.2 · verified recording</strong>
             <span id="replay-cycle">Cycle 0 / tick 0</span></div>
           <div class="board"><div><span id="led0" class="led"></span><b>LED 0</b>
             <span id="button0" class="button-state"></span></div>
@@ -585,6 +686,15 @@ def render_block(b):
           <button id="replay-step">Step</button><button id="replay-reset">Reset</button>
           </div></div>"""
     raise ValueError(kind)
+
+
+def replay_rows():
+    """Stage 1 rows, which every other runtime image must reproduce exactly."""
+    runs = {key: json.loads((ROOT / f"evidence/{key}-run.json").read_text(encoding="utf-8"))["rows"]
+            for key, _ in RUNS}
+    if any(rows != runs["tx5-m4"] for rows in runs.values()):
+        raise RuntimeError("LED/tick rows differ between runtime images")
+    return runs["tx5-m4"]
 
 
 def pdf_spec(deck):
@@ -600,7 +710,7 @@ def pdf_spec(deck):
                 content.append({"text": "Navigate in the interactive edition with arrows, swipe and Home. "
                                 "This PDF contains every slide in sequence.", "style": "note"})
             elif kind == "replay":
-                rows = json.loads((ROOT / "evidence/m55-run.json").read_text(encoding="utf-8"))["rows"]
+                rows = replay_rows()
                 body = [["Cycle", "Tick", "Button 0", "Button 1", "LED 0", "LED 1"]]
                 for row in rows:
                     body.append([str(row["cycle"]), str(row["tick"])] +
@@ -632,7 +742,7 @@ def pdf_spec(deck):
     definition = {
         "pageSize": "A4", "pageOrientation": "landscape",
         "pageMargins": [46, 42, 46, 36],
-        "info": {"title": "ThreadX 5.6 to 6.x: Cortex-M migration proof",
+        "info": {"title": "ThreadX 5.6 to 6.5: Cortex-M4 to M85 migration proof",
                  "author": "zuwasi", "subject": "Clang / QEMU migration evidence"},
         "defaultStyle": {"font": "Roboto", "fontSize": 13, "color": "#182840"},
         "styles": {
@@ -643,7 +753,7 @@ def pdf_spec(deck):
             "code": {"fontSize": 10, "lineHeight": 1.15, "margin": [0, 5, 0, 16]},
             "label": {"fontSize": 10, "color": "#56718b", "margin": [0, 5, 0, 9]},
         },
-        "footer": {"text": "ThreadX migration proof · MIT original work · M85 runtime remains unverified",
+        "footer": {"text": "ThreadX 5.6 to 6.5 migration proof · MIT original work · M85 runtime remains unverified",
                    "alignment": "center", "fontSize": 8, "color": "#6c7e91"},
         "content": content,
     }
@@ -666,13 +776,13 @@ def main():
                         f'<h1 id="title-{index}">{html.escape(slide["title"])}</h1>'
                         f'<p class="subtitle">{html.escape(slide["subtitle"])}</p>'
                         + "".join(render_block(b) for b in slide["blocks"]) + "</section>")
-    replay = json.loads((ROOT / "evidence/m55-run.json").read_text(encoding="utf-8"))["rows"]
+    replay = replay_rows()
     document = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
-<meta name="description" content="Technical ThreadX 5.6 to current 6.x and Cortex-M migration proof: Clang builds, QEMU tests, code diffs and measured evidence.">
-<title>ThreadX 5.6 → 6.x | Cortex-M migration proof</title>
+<meta name="description" content="ThreadX 5.6 to 6.5 and Cortex-M4 to M85 migration proof: one application on the real TX5 kernel and on TX6, Clang builds, QEMU tests, code diffs and measured evidence.">
+<title>ThreadX 5.6 → 6.5 | Cortex-M4 → M85 migration proof</title>
 <link rel="stylesheet" href="deck.css"><script src="deck.js" defer></script></head>
 <body><header class="topbar"><a href="#slide-1" id="brand">TX5 → TX6 · Engineering proof</a>
 <div><a href="threadx-migration.pdf">Download PDF</a>
@@ -689,7 +799,7 @@ def main():
 </body></html>"""
     (SITE / "index.html").write_text(document, encoding="utf-8")
     (SITE / "slides.json").write_text(json.dumps(deck, indent=2) + "\n", encoding="utf-8")
-    for name in ["summary.json", "m55-console.txt", "m4-console.txt",
+    for name in ["summary.json", "tx5-m4-console.txt", "m4-console.txt", "m55-console.txt",
                  "qemu-machines.txt", "qemu-cpus.txt"]:
         target = SITE / "evidence" / name
         target.parent.mkdir(exist_ok=True)

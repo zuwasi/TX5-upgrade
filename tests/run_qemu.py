@@ -17,6 +17,7 @@ ROW = re.compile(
     r"LED0=(ON|OFF) LED1=(ON|OFF) tick=(\d+)"
 )
 CORE_PARTS = {"cortex-m4": 0xC24, "cortex-m55": 0xD22}
+CURRENT_VERSION = "6.5.2.202603"
 
 
 def find_qemu() -> str:
@@ -31,12 +32,16 @@ def find_qemu() -> str:
     raise RuntimeError("Set QEMU_ARM or put qemu-system-arm on PATH")
 
 
-def validate(text: str, core: str) -> list[dict]:
+def validate(text: str, core: str, expected_version: str = CURRENT_VERSION) -> list[dict]:
+    # Express Logic TX5 banners prefix the toolchain letter, e.g. "G5.6.5.2".
+    if not re.fullmatch(r"(?:G?5|6)\.\d+(?:\.\d+)*", expected_version):
+        raise ValueError("Expected version must be an exact ThreadX 5.x or 6.x banner version")
     if "[pass] bounded LED sequence completed" not in text or "[fail]" in text:
         raise AssertionError("Firmware did not report a clean successful completion")
     if "[selftest] queue/preemption/events/semaphore/mutex/byte-pool PASS" not in text:
         raise AssertionError("RTOS service self-test did not pass")
-    if "Version 6.5.2.202603" not in text or f"[core] {core}" not in text:
+    versions = re.findall(r"\bVersion\s+([A-Z]?\d+(?:\.\d+)+)(?![\d.])", text)
+    if versions != [expected_version] or f"[core] {core}" not in text:
         raise AssertionError("Wrong RTOS version or core identity")
     cpuid = re.search(r"\[metric\] cpuid=(\d+)", text)
     if not cpuid or ((int(cpuid[1]) >> 4) & 0xFFF) != CORE_PARTS[core]:
@@ -71,7 +76,8 @@ def validate(text: str, core: str) -> list[dict]:
     return rows
 
 
-def run(elf: Path, machine: str, core: str, timeout: float = 20.0) -> dict:
+def run(elf: Path, machine: str, core: str, timeout: float = 20.0,
+        expected_version: str = CURRENT_VERSION) -> dict:
     if not elf.is_file():
         raise FileNotFoundError(elf)
     qemu = find_qemu()
@@ -89,9 +95,10 @@ def run(elf: Path, machine: str, core: str, timeout: float = 20.0) -> dict:
     text = completed.stdout + completed.stderr
     if completed.returncode != 0:
         raise AssertionError(f"QEMU exit {completed.returncode}:\n{text}")
-    rows = validate(text, core)
+    rows = validate(text, core, expected_version)
     return {
         "status": "PASS", "machine": machine, "core": core,
+        "expected_threadx_version": expected_version,
         "virtual_time_model": "QEMU icount shift=7 (128 ns per emulated instruction)",
         "host_wall_seconds": elapsed, "rows": rows, "log": text,
         "metrics": {name: int(value) for name, value in
@@ -105,11 +112,13 @@ def main() -> int:
     parser.add_argument("--elf", required=True, type=Path)
     parser.add_argument("--machine", required=True, choices=["mps2-an386", "mps3-an547"])
     parser.add_argument("--cpu", required=True, choices=list(CORE_PARTS))
+    parser.add_argument("--expected-version", default=CURRENT_VERSION)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     try:
-        result = run(args.elf.resolve(), args.machine, args.cpu)
-    except (AssertionError, OSError, RuntimeError, subprocess.TimeoutExpired) as error:
+        result = run(args.elf.resolve(), args.machine, args.cpu,
+                     expected_version=args.expected_version)
+    except (AssertionError, ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
     print(result["log"], end="")
